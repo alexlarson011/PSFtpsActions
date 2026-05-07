@@ -15,10 +15,7 @@ function New-FtpsSessionOptions {
         [int]$Port = 21,
 
         [Parameter(Mandatory = $true)]
-        [string]$Username,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Password,
+        [pscredential]$Credential,
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Tls12Only', 'Tls12OrHigher')]
@@ -36,8 +33,8 @@ function New-FtpsSessionOptions {
         Protocol   = [WinSCP.Protocol]::Ftp
         HostName   = $HostAddress
         PortNumber = $Port
-        UserName   = $Username
-        Password   = $Password
+        UserName   = $Credential.UserName
+        Password   = $Credential.GetNetworkCredential().Password
 
         # Explicit FTPS
         FtpSecure  = [WinSCP.FtpSecure]::Explicit

@@ -9,10 +9,16 @@ Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally se
 Name of the remote file or MVS member/data set name to delete.
 
 .PARAMETER Username
-FTPS username.
+FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password.
+FTPS password. Use with Username, or use Credential/CredentialName instead.
+
+.PARAMETER Credential
+PSCredential containing the FTPS username and password.
+
+.PARAMETER CredentialName
+Name of a credential stored with Set-PSFtpsCredential.
 
 .PARAMETER HostAddress
 FTPS server host name or IP address.
@@ -69,11 +75,17 @@ function Remove-FtpsFile {
         [Parameter(Mandatory = $true)]
         [string]$RemoteFileName,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Username,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Password,
+
+        [Parameter(Mandatory = $false)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory = $false)]
+        [string]$CredentialName,
 
         [Parameter(Mandatory = $true)]
         [string]$HostAddress,
@@ -142,11 +154,17 @@ function Remove-FtpsFile {
             -RetryCount $RetryCount `
             -RetryDelaySeconds $RetryDelaySeconds
 
+        $resolvedCredential = Resolve-FtpsCredential `
+            -BoundParameters $PSBoundParameters `
+            -Credential $Credential `
+            -CredentialName $CredentialName `
+            -Username $Username `
+            -Password $Password
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
-            -Username $Username `
-            -Password $Password `
+            -Credential $resolvedCredential `
             -TlsMode $securitySettings.TlsMode `
             -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
             -TimeoutSeconds $connectionSettings.TimeoutSeconds

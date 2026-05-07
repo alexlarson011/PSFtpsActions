@@ -15,10 +15,16 @@ Existing local directory where the downloaded file should be saved.
 Optional local file name. When omitted, RemoteFileName is used.
 
 .PARAMETER Username
-FTPS username.
+FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password.
+FTPS password. Use with Username, or use Credential/CredentialName instead.
+
+.PARAMETER Credential
+PSCredential containing the FTPS username and password.
+
+.PARAMETER CredentialName
+Name of a credential stored with Set-PSFtpsCredential.
 
 .PARAMETER HostAddress
 FTPS server host name or IP address.
@@ -84,11 +90,17 @@ function Get-FtpsFile {
         [Parameter(Mandatory = $false)]
         [string]$LocalFileName,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Username,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Password,
+
+        [Parameter(Mandatory = $false)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory = $false)]
+        [string]$CredentialName,
 
         [Parameter(Mandatory = $true)]
         [string]$HostAddress,
@@ -170,11 +182,17 @@ function Get-FtpsFile {
             -RetryCount $RetryCount `
             -RetryDelaySeconds $RetryDelaySeconds
 
+        $resolvedCredential = Resolve-FtpsCredential `
+            -BoundParameters $PSBoundParameters `
+            -Credential $Credential `
+            -CredentialName $CredentialName `
+            -Username $Username `
+            -Password $Password
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
-            -Username $Username `
-            -Password $Password `
+            -Credential $resolvedCredential `
             -TlsMode $securitySettings.TlsMode `
             -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
             -TimeoutSeconds $connectionSettings.TimeoutSeconds

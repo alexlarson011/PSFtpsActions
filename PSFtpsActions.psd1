@@ -18,7 +18,10 @@
         'Get-PSFtpsActionsSecurityDefault',
         'Set-PSFtpsActionsSecurityDefault',
         'Get-PSFtpsActionsConnectionDefault',
-        'Set-PSFtpsActionsConnectionDefault'
+        'Set-PSFtpsActionsConnectionDefault',
+        'Get-PSFtpsCredential',
+        'Remove-PSFtpsCredential',
+        'Set-PSFtpsCredential'
     )
 
     CmdletsToExport   = @()

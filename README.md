@@ -42,6 +42,9 @@ Get-Command -Module PSFtpsActions
 | `Set-PSFtpsActionsSecurityDefault` | Sets module security defaults for the current PowerShell session. |
 | `Get-PSFtpsActionsConnectionDefault` | Shows the current timeout and retry defaults. |
 | `Set-PSFtpsActionsConnectionDefault` | Sets timeout and retry defaults for the current PowerShell session. |
+| `Set-PSFtpsCredential` | Stores a named PSCredential in memory for the current PowerShell session. |
+| `Get-PSFtpsCredential` | Lists named credentials stored in memory. |
+| `Remove-PSFtpsCredential` | Removes a named credential from memory. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
 
 Use `Get-Help` for detailed command help:
@@ -59,6 +62,8 @@ Most FTPS commands share these parameters:
 | --- | --- |
 | `Username` | FTPS username. |
 | `Password` | FTPS password. |
+| `Credential` | PSCredential containing the FTPS username and password. |
+| `CredentialName` | Name of a credential stored with `Set-PSFtpsCredential`. |
 | `HostAddress` | FTPS server host name or IP address. |
 | `Port` | FTPS port. Defaults to `21`. |
 | `HostDirectory` | Remote directory, or an MVS dataset prefix when `-MvsMode` is used. |
@@ -85,6 +90,31 @@ Test-FtpsConnection `
     -Password 'pass' `
     -HostAddress 'ftps.example.com'
 ```
+
+### Use PSCredential
+
+```powershell
+$credential = Get-Credential
+
+Test-FtpsConnection `
+    -Credential $credential `
+    -HostAddress 'ftps.example.com'
+```
+
+### Use a named credential
+
+```powershell
+Set-PSFtpsCredential -Name 'partner-ftps' -Credential (Get-Credential)
+
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -CredentialName 'partner-ftps' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound'
+```
+
+The credential store is in memory only. It is not written to disk and lasts only for the current PowerShell session.
 
 ### Scan and pin a TLS certificate fingerprint
 

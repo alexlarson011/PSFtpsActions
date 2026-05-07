@@ -119,6 +119,33 @@ try {
 
     Assert-True -Condition $defaultedConnection.Success -Message "Connection test using module security defaults failed. $($defaultedConnection.Message)"
 
+    $testCredential = New-Object System.Management.Automation.PSCredential(
+        $server.username,
+        (ConvertTo-SecureString -String $server.password -AsPlainText -Force)
+    )
+
+    Set-PSFtpsCredential -Name 'local-ftps' -Credential $testCredential | Out-Null
+
+    $storedCredential = Get-PSFtpsCredential -Name 'local-ftps'
+    Assert-True -Condition ($storedCredential.Name -eq 'local-ftps') -Message 'Stored credential name was not returned.'
+    Assert-True -Condition ($storedCredential.Username -eq $server.username) -Message 'Stored credential username did not match.'
+
+    $credentialConnection = Test-FtpsConnection `
+        -Credential $testCredential `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    Assert-True -Condition $credentialConnection.Success -Message "Connection test using PSCredential failed. $($credentialConnection.Message)"
+
+    $namedCredentialConnection = Test-FtpsConnection `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    Assert-True -Condition $namedCredentialConnection.Success -Message "Connection test using named credential failed. $($namedCredentialConnection.Message)"
+
     $connection = Test-FtpsConnection `
         -Username $server.username `
         -Password $server.password `

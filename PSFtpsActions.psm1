@@ -11,6 +11,7 @@ $script:PSFtpsActionsConnectionDefault = @{
     RetryCount         = 0
     RetryDelaySeconds  = 5
 }
+$script:PSFtpsActionsCredentialStore = @{}
 
 $privateFunctions = Get-ChildItem -Path (Join-Path $PSScriptRoot 'Private') -Filter '*.ps1' -File
 $publicFunctions  = Get-ChildItem -Path (Join-Path $PSScriptRoot 'Public')  -Filter '*.ps1' -File
@@ -30,5 +31,8 @@ Export-ModuleMember -Function @(
     'Get-PSFtpsActionsSecurityDefault',
     'Set-PSFtpsActionsSecurityDefault',
     'Get-PSFtpsActionsConnectionDefault',
-    'Set-PSFtpsActionsConnectionDefault'
+    'Set-PSFtpsActionsConnectionDefault',
+    'Get-PSFtpsCredential',
+    'Remove-PSFtpsCredential',
+    'Set-PSFtpsCredential'
 )

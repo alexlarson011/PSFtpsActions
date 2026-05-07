@@ -6,10 +6,16 @@ Tests an explicit FTPS connection and optional remote location.
 Opens an FTPS session using the bundled WinSCP .NET assembly, optionally sends a SITE command, and optionally validates a host directory or MVS dataset prefix. Returns a structured object with success status and connection details instead of throwing for connection test failures.
 
 .PARAMETER Username
-FTPS username.
+FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password.
+FTPS password. Use with Username, or use Credential/CredentialName instead.
+
+.PARAMETER Credential
+PSCredential containing the FTPS username and password.
+
+.PARAMETER CredentialName
+Name of a credential stored with Set-PSFtpsCredential.
 
 .PARAMETER HostAddress
 FTPS server host name or IP address.
@@ -63,11 +69,17 @@ Tests the connection and validates the MVS dataset prefix.
 function Test-FtpsConnection {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Username,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$Password,
+
+        [Parameter(Mandatory = $false)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory = $false)]
+        [string]$CredentialName,
 
         [Parameter(Mandatory = $true)]
         [string]$HostAddress,
@@ -116,6 +128,7 @@ function Test-FtpsConnection {
     $operationName = 'Test-FtpsConnection'
     $transcriptStarted = $false
     $session = $null
+    $resolvedUsername = $Username
 
     try {
         if (-not [string]::IsNullOrWhiteSpace($LogDirectory)) {
@@ -136,11 +149,18 @@ function Test-FtpsConnection {
             -RetryCount $RetryCount `
             -RetryDelaySeconds $RetryDelaySeconds
 
+        $resolvedCredential = Resolve-FtpsCredential `
+            -BoundParameters $PSBoundParameters `
+            -Credential $Credential `
+            -CredentialName $CredentialName `
+            -Username $Username `
+            -Password $Password
+        $resolvedUsername = $resolvedCredential.UserName
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
-            -Username $Username `
-            -Password $Password `
+            -Credential $resolvedCredential `
             -TlsMode $securitySettings.TlsMode `
             -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
             -TimeoutSeconds $connectionSettings.TimeoutSeconds
@@ -154,7 +174,7 @@ function Test-FtpsConnection {
         Write-Host "Testing explicit FTPS connection..."
         Write-Host "Host: $HostAddress"
         Write-Host "Port: $Port"
-        Write-Host "User: $Username"
+        Write-Host "User: $resolvedUsername"
 
         Invoke-FtpsRetry `
             -RetryCount $connectionSettings.RetryCount `
@@ -210,7 +230,7 @@ function Test-FtpsConnection {
             Success       = $true
             HostAddress   = $HostAddress
             Port          = $Port
-            Username      = $Username
+            Username      = $resolvedUsername
             HostDirectory = $HostDirectory
             MvsMode       = [bool]$MvsMode
             Message       = 'Connection test succeeded.'
@@ -221,7 +241,7 @@ function Test-FtpsConnection {
             Success       = $false
             HostAddress   = $HostAddress
             Port          = $Port
-            Username      = $Username
+            Username      = $resolvedUsername
             HostDirectory = $HostDirectory
             MvsMode       = [bool]$MvsMode
             Message       = $_.Exception.Message

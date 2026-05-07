@@ -60,6 +60,9 @@ Most FTPS commands share these parameters:
 | `HostDirectory` | Remote directory, or an MVS dataset prefix when `-MvsMode` is used. |
 | `SiteCommand` | Optional command sent after connection and before the file operation. |
 | `MvsMode` | Uses MVS dataset-prefix navigation. |
+| `ConvertToUtf8NoBom` | `Send-FtpsFile` only. Uploads a temporary UTF-8 without BOM copy and leaves the source file unchanged. |
+| `TrimTrailingWhitespace` | `Send-FtpsFile` only. Removes trailing spaces and tabs from each line in the temporary upload copy. |
+| `LineEnding` | `Send-FtpsFile` only. Uses `Preserve` by default. Can be switched to `Windows` CRLF or `Unix` LF. |
 | `LogDirectory` | Optional directory for PowerShell transcript logs. |
 | `EnableSessionLog` | Enables WinSCP session logging. |
 | `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to `Tls12Only`. |
@@ -100,6 +103,52 @@ Send-FtpsFile `
     -Password 'pass' `
     -HostAddress 'ftps.example.com' `
     -HostDirectory '/inbound'
+```
+
+### Upload as normalized text
+
+```powershell
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound' `
+    -ConvertToUtf8NoBom `
+    -TrimTrailingWhitespace
+```
+
+The source file is not modified. The module creates a temporary UTF-8 without BOM copy, trims trailing spaces and tabs, preserves source line endings, and uploads that copy.
+
+Switch to Windows CRLF line endings when needed:
+
+```powershell
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound' `
+    -ConvertToUtf8NoBom `
+    -TrimTrailingWhitespace `
+    -LineEnding Windows
+```
+
+Switch to Unix LF line endings when needed:
+
+```powershell
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound' `
+    -ConvertToUtf8NoBom `
+    -TrimTrailingWhitespace `
+    -LineEnding Unix
 ```
 
 ### Download a file

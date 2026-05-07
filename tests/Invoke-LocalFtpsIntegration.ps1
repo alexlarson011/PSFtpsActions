@@ -162,6 +162,163 @@ try {
 
     Assert-True -Condition (-not $removedInfo.Exists) -Message 'Remote file still exists after delete.'
 
+    $utf16UploadPath = Join-Path $localDir 'utf16-upload.txt'
+    $utf8DownloadPath = Join-Path $downloadDir 'utf8-downloaded.txt'
+    [System.IO.File]::WriteAllText($utf16UploadPath, "UTF-8 without BOM upload test   `r`nSecond line`t  `r`n", [System.Text.Encoding]::Unicode)
+
+    $originalBytes = [System.IO.File]::ReadAllBytes($utf16UploadPath)
+    Assert-True `
+        -Condition ($originalBytes.Length -ge 2 -and $originalBytes[0] -eq 0xff -and $originalBytes[1] -eq 0xfe) `
+        -Message 'UTF-16 source file did not contain the expected BOM before upload.'
+
+    Send-FtpsFile `
+        -FilePath $utf16UploadPath `
+        -RemoteFileName 'utf8-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint `
+        -ConvertToUtf8NoBom `
+        -TrimTrailingWhitespace `
+        -LineEnding Unix
+
+    Get-FtpsFile `
+        -RemoteFileName 'utf8-upload.txt' `
+        -LocalDirectory $downloadDir `
+        -LocalFileName 'utf8-downloaded.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $downloadedBytes = [System.IO.File]::ReadAllBytes($utf8DownloadPath)
+    Assert-True `
+        -Condition (-not ($downloadedBytes.Length -ge 3 -and $downloadedBytes[0] -eq 0xef -and $downloadedBytes[1] -eq 0xbb -and $downloadedBytes[2] -eq 0xbf)) `
+        -Message 'Downloaded converted file contains a UTF-8 BOM.'
+    Assert-True `
+        -Condition (-not ([System.Text.Encoding]::UTF8.GetString($downloadedBytes).Contains("`r"))) `
+        -Message 'Downloaded converted file contains Windows CRLF line endings.'
+    Assert-True `
+        -Condition ([System.IO.File]::ReadAllText($utf8DownloadPath, [System.Text.Encoding]::UTF8) -eq "UTF-8 without BOM upload test`nSecond line`n") `
+        -Message 'Downloaded converted file content did not match expected UTF-8 text.'
+
+    Remove-FtpsFile `
+        -RemoteFileName 'utf8-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $preserveUploadPath = Join-Path $localDir 'preserve-upload.txt'
+    $preserveDownloadPath = Join-Path $downloadDir 'preserve-downloaded.txt'
+    [System.IO.File]::WriteAllText($preserveUploadPath, "Default preserve line ending test   `nSecond line`t  `n", [System.Text.Encoding]::Unicode)
+
+    Send-FtpsFile `
+        -FilePath $preserveUploadPath `
+        -RemoteFileName 'preserve-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint `
+        -ConvertToUtf8NoBom `
+        -TrimTrailingWhitespace
+
+    Get-FtpsFile `
+        -RemoteFileName 'preserve-upload.txt' `
+        -LocalDirectory $downloadDir `
+        -LocalFileName 'preserve-downloaded.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $preserveBytes = [System.IO.File]::ReadAllBytes($preserveDownloadPath)
+    Assert-True `
+        -Condition (-not ($preserveBytes.Length -ge 3 -and $preserveBytes[0] -eq 0xef -and $preserveBytes[1] -eq 0xbb -and $preserveBytes[2] -eq 0xbf)) `
+        -Message 'Downloaded default preserve converted file contains a UTF-8 BOM.'
+    Assert-True `
+        -Condition (-not ([System.Text.Encoding]::UTF8.GetString($preserveBytes).Contains("`r"))) `
+        -Message 'Downloaded default preserve converted file unexpectedly contains CR line endings.'
+    Assert-True `
+        -Condition ([System.IO.File]::ReadAllText($preserveDownloadPath, [System.Text.Encoding]::UTF8) -eq "Default preserve line ending test`nSecond line`n") `
+        -Message 'Downloaded default preserve converted file content did not match expected LF text.'
+
+    Remove-FtpsFile `
+        -RemoteFileName 'preserve-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $windowsUploadPath = Join-Path $localDir 'windows-upload.txt'
+    $windowsDownloadPath = Join-Path $downloadDir 'windows-downloaded.txt'
+    [System.IO.File]::WriteAllText($windowsUploadPath, "Explicit Windows line ending test   `nSecond line`t  `n", [System.Text.Encoding]::Unicode)
+
+    Send-FtpsFile `
+        -FilePath $windowsUploadPath `
+        -RemoteFileName 'windows-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint `
+        -ConvertToUtf8NoBom `
+        -TrimTrailingWhitespace `
+        -LineEnding Windows
+
+    Get-FtpsFile `
+        -RemoteFileName 'windows-upload.txt' `
+        -LocalDirectory $downloadDir `
+        -LocalFileName 'windows-downloaded.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $windowsBytes = [System.IO.File]::ReadAllBytes($windowsDownloadPath)
+    Assert-True `
+        -Condition (-not ($windowsBytes.Length -ge 3 -and $windowsBytes[0] -eq 0xef -and $windowsBytes[1] -eq 0xbb -and $windowsBytes[2] -eq 0xbf)) `
+        -Message 'Downloaded explicit Windows converted file contains a UTF-8 BOM.'
+    Assert-True `
+        -Condition ([System.Text.Encoding]::UTF8.GetString($windowsBytes).Contains("`r`n")) `
+        -Message 'Downloaded explicit Windows converted file does not contain CRLF line endings.'
+    Assert-True `
+        -Condition ([System.IO.File]::ReadAllText($windowsDownloadPath, [System.Text.Encoding]::UTF8) -eq "Explicit Windows line ending test`r`nSecond line`r`n") `
+        -Message 'Downloaded explicit Windows converted file content did not match expected CRLF text.'
+
+    Remove-FtpsFile `
+        -RemoteFileName 'windows-upload.txt' `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint
+
     Write-Host 'Local FTPS integration test passed.'
 }
 finally {

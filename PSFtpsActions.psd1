@@ -1,5 +1,5 @@
 @{
-    RootModule        = 'FtpsActions.psm1'
+    RootModule        = 'PSFtpsActions.psm1'
     ModuleVersion     = '1.0.0'
     GUID              = '9b99909c-ef3d-4a59-b3e2-7b1ad47a8f21'
     Author            = 'Alex Larson'

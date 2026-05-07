@@ -3,7 +3,7 @@
 Normalizes a TLS host certificate fingerprint for WinSCP.
 
 .DESCRIPTION
-Accepts fingerprints pasted from WinSCP logs, PowerShell certificate thumbprints, or colon-delimited values. Returns a WinSCP-friendly fingerprint string when the value can be normalized, otherwise returns the trimmed input.
+Accepts fingerprints pasted from WinSCP logs, PowerShell certificate thumbprints, or colon-delimited values. Returns the WinSCP SessionOptions format: colon-delimited hex without an algorithm prefix.
 #>
 function Normalize-TlsHostCertificateFingerprint {
     [CmdletBinding()]
@@ -20,7 +20,11 @@ function Normalize-TlsHostCertificateFingerprint {
     $normalized = $Fingerprint.Trim().Trim('[', ']')
 
     if ($normalized.Contains(';')) {
-        return $normalized
+        $fingerprints = foreach ($part in ($normalized -split ';')) {
+            Normalize-TlsHostCertificateFingerprint -Fingerprint $part
+        }
+
+        return ($fingerprints | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ';'
     }
 
     $algorithm = $null
@@ -50,11 +54,11 @@ function Normalize-TlsHostCertificateFingerprint {
             $hexOnly.Substring($index, 2).ToLowerInvariant()
         }
 
-        return "${algorithm}: $($pairs -join ':')"
+        return $pairs -join ':'
     }
 
     if (-not [string]::IsNullOrWhiteSpace($algorithm)) {
-        return "${algorithm}: $($body.Trim())"
+        return $body.Trim()
     }
 
     return $normalized

@@ -179,7 +179,25 @@ When your server requires certificate pinning, use `Get-FtpsTlsHostCertificateFi
 The fingerprint parameter accepts WinSCP-style values such as:
 
 ```text
-SHA-256: 00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff
+00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff
 ```
 
-It also normalizes common pasted forms, including bracketed WinSCP log output and plain certificate thumbprints.
+It also normalizes common pasted forms, including bracketed WinSCP log output, values with a `SHA-256:` or `SHA-1:` prefix, and plain certificate thumbprints.
+
+## Local Integration Testing
+
+The repository includes a local explicit FTPS integration test harness. It starts a temporary Python FTPS server, generates a short-lived self-signed certificate, scans the certificate fingerprint, then exercises connection, upload, remote-file check, download, and delete operations.
+
+Install the development dependencies:
+
+```powershell
+python -m pip install --user -r requirements-dev.txt
+```
+
+Run the local integration test:
+
+```powershell
+.\tests\Invoke-LocalFtpsIntegration.ps1
+```
+
+The test creates all files under a temporary directory and removes them when it finishes.

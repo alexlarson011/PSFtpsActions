@@ -39,7 +39,7 @@ Optional directory for PowerShell transcript logs.
 Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the temp directory.
 
 .PARAMETER TlsMode
-Controls WinSCP TLS raw settings. Defaults to Tls12Only.
+Controls WinSCP TLS raw settings. Defaults to the module security default.
 
 .PARAMETER TlsHostCertificateFingerprint
 Optional TLS host certificate fingerprint to validate the FTPS server certificate. Values pasted from WinSCP logs or certificate thumbprints are normalized before being passed to WinSCP.
@@ -92,7 +92,7 @@ function Remove-FtpsFile {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Tls12Only', 'Tls12OrHigher')]
-        [string]$TlsMode = 'Tls12Only',
+        [string]$TlsMode,
 
         [Parameter(Mandatory = $false)]
         [string]$TlsHostCertificateFingerprint
@@ -110,13 +110,18 @@ function Remove-FtpsFile {
 
         Import-WinScpAssembly -WinScpDllPath $WinScpDllPath
 
+        $securitySettings = Resolve-FtpsSecuritySettings `
+            -BoundParameters $PSBoundParameters `
+            -TlsMode $TlsMode `
+            -TlsHostCertificateFingerprint $TlsHostCertificateFingerprint
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
             -Username $Username `
             -Password $Password `
-            -TlsMode $TlsMode `
-            -TlsHostCertificateFingerprint $TlsHostCertificateFingerprint
+            -TlsMode $securitySettings.TlsMode `
+            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint
 
         $session = New-FtpsSession `
             -LogDirectory $LogDirectory `

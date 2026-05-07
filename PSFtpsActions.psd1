@@ -14,7 +14,9 @@
         'Test-FtpsRemoteFile',
         'Get-TDayFileName',
         'Test-FtpsConnection',
-        'Get-FtpsTlsHostCertificateFingerprint'
+        'Get-FtpsTlsHostCertificateFingerprint',
+        'Get-PSFtpsActionsSecurityDefault',
+        'Set-PSFtpsActionsSecurityDefault'
     )
 
     CmdletsToExport   = @()

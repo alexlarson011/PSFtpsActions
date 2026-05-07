@@ -24,7 +24,7 @@ Optional directory for a WinSCP session log.
 Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the temp directory.
 
 .PARAMETER TlsMode
-Controls WinSCP TLS raw settings. Defaults to Tls12Only.
+Controls WinSCP TLS raw settings. Defaults to the module security default.
 
 .EXAMPLE
 Get-FtpsTlsHostCertificateFingerprint -HostAddress 'ftps.example.com'
@@ -61,7 +61,7 @@ function Get-FtpsTlsHostCertificateFingerprint {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Tls12Only', 'Tls12OrHigher')]
-        [string]$TlsMode = 'Tls12Only'
+        [string]$TlsMode
     )
 
     $operationName = 'Get-FtpsTlsHostCertificateFingerprint'
@@ -78,7 +78,11 @@ function Get-FtpsTlsHostCertificateFingerprint {
             FtpMode    = [WinSCP.FtpMode]::Passive
         }
 
-        switch ($TlsMode) {
+        $securitySettings = Resolve-FtpsSecuritySettings `
+            -BoundParameters $PSBoundParameters `
+            -TlsMode $TlsMode
+
+        switch ($securitySettings.TlsMode) {
             'Tls12Only' {
                 $sessionOptions.AddRawSettings('MinTlsVersion', '12')
                 $sessionOptions.AddRawSettings('MaxTlsVersion', '12')

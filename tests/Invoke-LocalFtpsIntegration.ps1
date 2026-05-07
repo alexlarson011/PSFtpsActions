@@ -83,6 +83,27 @@ try {
         -Condition ($scanned.Fingerprint -eq $server.fingerprint) `
         -Message "Scanned fingerprint did not match generated certificate. Expected '$($server.fingerprint)', got '$($scanned.Fingerprint)'."
 
+    $defaultSecurity = Get-PSFtpsActionsSecurityDefault
+    Assert-True -Condition ($defaultSecurity.TlsMode -eq 'Default') -Message 'Built-in TLS mode default was not Default.'
+    Assert-True -Condition ([string]::IsNullOrWhiteSpace($defaultSecurity.TlsHostCertificateFingerprint)) -Message 'Built-in TLS fingerprint default was not empty.'
+
+    Set-PSFtpsActionsSecurityDefault `
+        -TlsMode Default `
+        -TlsHostCertificateFingerprint $scanned.Fingerprint | Out-Null
+
+    $configuredSecurity = Get-PSFtpsActionsSecurityDefault
+    Assert-True -Condition ($configuredSecurity.TlsMode -eq 'Default') -Message 'Configured TLS mode default was not Default.'
+    Assert-True -Condition ($configuredSecurity.TlsHostCertificateFingerprint -eq $scanned.Fingerprint) -Message 'Configured TLS fingerprint default did not match the scanned fingerprint.'
+
+    $defaultedConnection = Test-FtpsConnection `
+        -Username $server.username `
+        -Password $server.password `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    Assert-True -Condition $defaultedConnection.Success -Message "Connection test using module security defaults failed. $($defaultedConnection.Message)"
+
     $connection = Test-FtpsConnection `
         -Username $server.username `
         -Password $server.password `

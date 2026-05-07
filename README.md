@@ -38,6 +38,8 @@ Get-Command -Module PSFtpsActions
 | `Test-FtpsRemoteFile` | Checks whether a remote file exists and returns metadata when available. |
 | `Test-FtpsConnection` | Tests the FTPS connection and optionally validates a remote directory or MVS dataset prefix. |
 | `Get-FtpsTlsHostCertificateFingerprint` | Scans an FTPS server TLS certificate fingerprint for certificate pinning. |
+| `Get-PSFtpsActionsSecurityDefault` | Shows the current module security defaults. |
+| `Set-PSFtpsActionsSecurityDefault` | Sets module security defaults for the current PowerShell session. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
 
 Use `Get-Help` for detailed command help:
@@ -65,8 +67,8 @@ Most FTPS commands share these parameters:
 | `LineEnding` | `Send-FtpsFile` only. Uses `Preserve` by default. Can be switched to `Windows` CRLF or `Unix` LF. |
 | `LogDirectory` | Optional directory for PowerShell transcript logs. |
 | `EnableSessionLog` | Enables WinSCP session logging. |
-| `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to `Tls12Only`. |
-| `TlsHostCertificateFingerprint` | Optional FTPS server certificate fingerprint. Values pasted from WinSCP logs or certificate thumbprints are normalized before use. |
+| `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to the module security default. |
+| `TlsHostCertificateFingerprint` | Optional FTPS server certificate fingerprint. Defaults to the module security default. Values pasted from WinSCP logs or certificate thumbprints are normalized before use. |
 
 ## Examples
 
@@ -221,7 +223,35 @@ Send-FtpsFile `
 
 ## TLS Notes
 
-The module defaults to `Tls12Only`, which sets both minimum and maximum TLS version to TLS 1.2 through WinSCP raw settings. Use `Tls12OrHigher` when the server supports newer TLS versions, or `Default` to let WinSCP choose.
+The module's built-in security default is `TlsMode = Default` with no default certificate fingerprint. That means the module does not impose a TLS version constraint or certificate pin unless you configure one. The connection still uses explicit FTPS.
+
+Set your current PowerShell session to require TLS 1.2 by default:
+
+```powershell
+Set-PSFtpsActionsSecurityDefault -TlsMode Tls12Only
+```
+
+View the current defaults:
+
+```powershell
+Get-PSFtpsActionsSecurityDefault
+```
+
+Restore the built-in behavior:
+
+```powershell
+Set-PSFtpsActionsSecurityDefault -TlsMode Default -ClearTlsHostCertificateFingerprint
+```
+
+You can still override the defaults per command:
+
+```powershell
+Test-FtpsConnection `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -TlsMode Tls12Only
+```
 
 When your server requires certificate pinning, use `Get-FtpsTlsHostCertificateFingerprint` to scan the server certificate, verify the returned value through your normal trust process, then pass it to `-TlsHostCertificateFingerprint`.
 

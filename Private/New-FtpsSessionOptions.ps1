@@ -22,7 +22,7 @@ function New-FtpsSessionOptions {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Tls12Only', 'Tls12OrHigher')]
-        [string]$TlsMode = 'Tls12Only',
+        [string]$TlsMode = 'Default',
 
         [Parameter(Mandatory = $false)]
         [string]$TlsHostCertificateFingerprint

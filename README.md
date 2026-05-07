@@ -40,6 +40,8 @@ Get-Command -Module PSFtpsActions
 | `Get-FtpsTlsHostCertificateFingerprint` | Scans an FTPS server TLS certificate fingerprint for certificate pinning. |
 | `Get-PSFtpsActionsSecurityDefault` | Shows the current module security defaults. |
 | `Set-PSFtpsActionsSecurityDefault` | Sets module security defaults for the current PowerShell session. |
+| `Get-PSFtpsActionsConnectionDefault` | Shows the current timeout and retry defaults. |
+| `Set-PSFtpsActionsConnectionDefault` | Sets timeout and retry defaults for the current PowerShell session. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
 
 Use `Get-Help` for detailed command help:
@@ -69,6 +71,9 @@ Most FTPS commands share these parameters:
 | `EnableSessionLog` | Enables WinSCP session logging. |
 | `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to the module security default. |
 | `TlsHostCertificateFingerprint` | Optional FTPS server certificate fingerprint. Defaults to the module security default. Values pasted from WinSCP logs or certificate thumbprints are normalized before use. |
+| `TimeoutSeconds` | WinSCP timeout in seconds. Defaults to the module connection default, initially `30`. |
+| `RetryCount` | Number of additional retry attempts after the first attempt. Defaults to the module connection default, initially `0`. |
+| `RetryDelaySeconds` | Delay between retry attempts in seconds. Defaults to the module connection default, initially `5`. |
 
 ## Examples
 
@@ -219,6 +224,46 @@ Send-FtpsFile `
     -HostDirectory '/inbound' `
     -LogDirectory 'C:\Temp\FtpsLogs' `
     -EnableSessionLog
+```
+
+## Connection Defaults
+
+The module has session-scoped timeout and retry defaults:
+
+```powershell
+Get-PSFtpsActionsConnectionDefault
+```
+
+Fresh module sessions start with:
+
+```text
+TimeoutSeconds    = 30
+RetryCount        = 0
+RetryDelaySeconds = 5
+```
+
+Retries default to `0` because repeating uploads and deletes can be surprising. You can opt in for a flaky endpoint:
+
+```powershell
+Set-PSFtpsActionsConnectionDefault `
+    -TimeoutSeconds 60 `
+    -RetryCount 2 `
+    -RetryDelaySeconds 10
+```
+
+You can also override per command:
+
+```powershell
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound' `
+    -TimeoutSeconds 60 `
+    -RetryCount 2 `
+    -RetryDelaySeconds 10
 ```
 
 ## TLS Notes

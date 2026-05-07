@@ -95,6 +95,21 @@ try {
     Assert-True -Condition ($configuredSecurity.TlsMode -eq 'Default') -Message 'Configured TLS mode default was not Default.'
     Assert-True -Condition ($configuredSecurity.TlsHostCertificateFingerprint -eq $scanned.Fingerprint) -Message 'Configured TLS fingerprint default did not match the scanned fingerprint.'
 
+    $defaultConnectionSettings = Get-PSFtpsActionsConnectionDefault
+    Assert-True -Condition ($defaultConnectionSettings.TimeoutSeconds -eq 30) -Message 'Built-in timeout default was not 30 seconds.'
+    Assert-True -Condition ($defaultConnectionSettings.RetryCount -eq 0) -Message 'Built-in retry count default was not 0.'
+    Assert-True -Condition ($defaultConnectionSettings.RetryDelaySeconds -eq 5) -Message 'Built-in retry delay default was not 5 seconds.'
+
+    Set-PSFtpsActionsConnectionDefault `
+        -TimeoutSeconds 15 `
+        -RetryCount 1 `
+        -RetryDelaySeconds 0 | Out-Null
+
+    $configuredConnectionSettings = Get-PSFtpsActionsConnectionDefault
+    Assert-True -Condition ($configuredConnectionSettings.TimeoutSeconds -eq 15) -Message 'Configured timeout default was not 15 seconds.'
+    Assert-True -Condition ($configuredConnectionSettings.RetryCount -eq 1) -Message 'Configured retry count default was not 1.'
+    Assert-True -Condition ($configuredConnectionSettings.RetryDelaySeconds -eq 0) -Message 'Configured retry delay default was not 0 seconds.'
+
     $defaultedConnection = Test-FtpsConnection `
         -Username $server.username `
         -Password $server.password `

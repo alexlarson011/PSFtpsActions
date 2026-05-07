@@ -16,7 +16,9 @@
         'Test-FtpsConnection',
         'Get-FtpsTlsHostCertificateFingerprint',
         'Get-PSFtpsActionsSecurityDefault',
-        'Set-PSFtpsActionsSecurityDefault'
+        'Set-PSFtpsActionsSecurityDefault',
+        'Get-PSFtpsActionsConnectionDefault',
+        'Set-PSFtpsActionsConnectionDefault'
     )
 
     CmdletsToExport   = @()

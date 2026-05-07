@@ -26,6 +26,15 @@ Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the tem
 .PARAMETER TlsMode
 Controls WinSCP TLS raw settings. Defaults to the module security default.
 
+.PARAMETER TimeoutSeconds
+WinSCP timeout in seconds. Defaults to the module connection default.
+
+.PARAMETER RetryCount
+Number of additional retry attempts for the fingerprint scan. Defaults to the module connection default.
+
+.PARAMETER RetryDelaySeconds
+Delay between retry attempts in seconds. Defaults to the module connection default.
+
 .EXAMPLE
 Get-FtpsTlsHostCertificateFingerprint -HostAddress 'ftps.example.com'
 
@@ -61,7 +70,19 @@ function Get-FtpsTlsHostCertificateFingerprint {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Tls12Only', 'Tls12OrHigher')]
-        [string]$TlsMode
+        [string]$TlsMode,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 100)]
+        [int]$RetryCount,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 86400)]
+        [int]$RetryDelaySeconds
     )
 
     $operationName = 'Get-FtpsTlsHostCertificateFingerprint'
@@ -82,6 +103,12 @@ function Get-FtpsTlsHostCertificateFingerprint {
             -BoundParameters $PSBoundParameters `
             -TlsMode $TlsMode
 
+        $connectionSettings = Resolve-FtpsConnectionSettings `
+            -BoundParameters $PSBoundParameters `
+            -TimeoutSeconds $TimeoutSeconds `
+            -RetryCount $RetryCount `
+            -RetryDelaySeconds $RetryDelaySeconds
+
         switch ($securitySettings.TlsMode) {
             'Tls12Only' {
                 $sessionOptions.AddRawSettings('MinTlsVersion', '12')
@@ -97,17 +124,24 @@ function Get-FtpsTlsHostCertificateFingerprint {
             }
         }
 
+        $sessionOptions.Timeout = [TimeSpan]::FromSeconds($connectionSettings.TimeoutSeconds)
+
         $session = New-FtpsSession `
             -LogDirectory $LogDirectory `
             -EnableSessionLog:$EnableSessionLog `
-            -OperationName $operationName
+            -OperationName $operationName `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         Write-Host "Scanning FTPS TLS certificate fingerprint..."
         Write-Host "Host     : $HostAddress"
         Write-Host "Port     : $Port"
         Write-Host "Algorithm: $Algorithm"
 
-        $fingerprint = $session.ScanFingerprint($sessionOptions, $Algorithm)
+        $fingerprint = Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'Scan FTPS TLS certificate fingerprint' `
+            -ScriptBlock { $session.ScanFingerprint($sessionOptions, $Algorithm) }
         $fingerprint = Normalize-TlsHostCertificateFingerprint -Fingerprint $fingerprint
 
         [PSCustomObject]@{

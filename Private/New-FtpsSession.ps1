@@ -15,10 +15,15 @@ function New-FtpsSession {
         [switch]$EnableSessionLog,
 
         [Parameter(Mandatory = $true)]
-        [string]$OperationName
+        [string]$OperationName,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds = 30
     )
 
     $session = New-Object WinSCP.Session
+    $session.Timeout = [TimeSpan]::FromSeconds($TimeoutSeconds)
 
     if ($EnableSessionLog) {
         $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'

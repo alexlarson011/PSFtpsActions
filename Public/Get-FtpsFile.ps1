@@ -53,6 +53,15 @@ Controls WinSCP TLS raw settings. Defaults to the module security default.
 .PARAMETER TlsHostCertificateFingerprint
 Optional TLS host certificate fingerprint to validate the FTPS server certificate. Values pasted from WinSCP logs or certificate thumbprints are normalized before being passed to WinSCP.
 
+.PARAMETER TimeoutSeconds
+WinSCP timeout in seconds. Defaults to the module connection default.
+
+.PARAMETER RetryCount
+Number of additional retry attempts for connection and transfer actions. Defaults to the module connection default.
+
+.PARAMETER RetryDelaySeconds
+Delay between retry attempts in seconds. Defaults to the module connection default.
+
 .EXAMPLE
 Get-FtpsFile -RemoteFileName 'inbound.txt' -LocalDirectory 'C:\Temp' -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com' -HostDirectory '/outbound'
 
@@ -113,7 +122,19 @@ function Get-FtpsFile {
         [string]$TlsMode,
 
         [Parameter(Mandatory = $false)]
-        [string]$TlsHostCertificateFingerprint
+        [string]$TlsHostCertificateFingerprint,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 100)]
+        [int]$RetryCount,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 86400)]
+        [int]$RetryDelaySeconds
     )
 
     $operationName = 'Get-FtpsFile'
@@ -143,21 +164,33 @@ function Get-FtpsFile {
             -TlsMode $TlsMode `
             -TlsHostCertificateFingerprint $TlsHostCertificateFingerprint
 
+        $connectionSettings = Resolve-FtpsConnectionSettings `
+            -BoundParameters $PSBoundParameters `
+            -TimeoutSeconds $TimeoutSeconds `
+            -RetryCount $RetryCount `
+            -RetryDelaySeconds $RetryDelaySeconds
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
             -Username $Username `
             -Password $Password `
             -TlsMode $securitySettings.TlsMode `
-            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint
+            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         $session = New-FtpsSession `
             -LogDirectory $LogDirectory `
             -EnableSessionLog:$EnableSessionLog `
-            -OperationName $operationName
+            -OperationName $operationName `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         Write-Host "Connecting to $HostAddress on port $Port using explicit FTPS..."
-        $session.Open($sessionOptions)
+        Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'Open FTPS session' `
+            -ScriptBlock { $session.Open($sessionOptions) } | Out-Null
 
         Invoke-FtpsSiteCommand `
             -Session $session `
@@ -178,12 +211,18 @@ function Get-FtpsFile {
         Write-Host "Mode       : ASCII"
         Write-Host "MVS mode   : $MvsMode"
 
-        $transferResult = $session.GetFiles(
-            $remotePath,
-            $localPath,
-            $false,
-            $transferOptions
-        )
+        $transferResult = Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'Download FTPS file' `
+            -ScriptBlock {
+                $session.GetFiles(
+                    $remotePath,
+                    $localPath,
+                    $false,
+                    $transferOptions
+                )
+            }
 
         $transferResult.Check()
 
@@ -201,7 +240,11 @@ function Get-FtpsFile {
                 Write-Host "Using MVS delete command:"
                 Write-Host "DELE $RemoteFileName"
 
-                $deleteResult = $session.ExecuteCommand("DELE $RemoteFileName")
+                $deleteResult = Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'Delete MVS remote file' `
+                    -ScriptBlock { $session.ExecuteCommand("DELE $RemoteFileName") }
 
                 if (-not [string]::IsNullOrWhiteSpace($deleteResult.Output)) {
                     Write-Host "Delete output:"
@@ -213,7 +256,11 @@ function Get-FtpsFile {
                 }
             }
             else {
-                $removeResult = $session.RemoveFiles($remotePath)
+                $removeResult = Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'Delete remote file' `
+                    -ScriptBlock { $session.RemoveFiles($remotePath) }
                 $removeResult.Check()
             }
 

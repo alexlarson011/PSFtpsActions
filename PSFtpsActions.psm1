@@ -6,6 +6,11 @@ $script:PSFtpsActionsSecurityDefault = @{
     TlsMode                       = 'Default'
     TlsHostCertificateFingerprint = $null
 }
+$script:PSFtpsActionsConnectionDefault = @{
+    TimeoutSeconds     = 30
+    RetryCount         = 0
+    RetryDelaySeconds  = 5
+}
 
 $privateFunctions = Get-ChildItem -Path (Join-Path $PSScriptRoot 'Private') -Filter '*.ps1' -File
 $publicFunctions  = Get-ChildItem -Path (Join-Path $PSScriptRoot 'Public')  -Filter '*.ps1' -File
@@ -23,5 +28,7 @@ Export-ModuleMember -Function @(
     'Test-FtpsConnection',
     'Get-FtpsTlsHostCertificateFingerprint',
     'Get-PSFtpsActionsSecurityDefault',
-    'Set-PSFtpsActionsSecurityDefault'
+    'Set-PSFtpsActionsSecurityDefault',
+    'Get-PSFtpsActionsConnectionDefault',
+    'Set-PSFtpsActionsConnectionDefault'
 )

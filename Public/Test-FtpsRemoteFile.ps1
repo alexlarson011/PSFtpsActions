@@ -44,6 +44,15 @@ Controls WinSCP TLS raw settings. Defaults to the module security default.
 .PARAMETER TlsHostCertificateFingerprint
 Optional TLS host certificate fingerprint to validate the FTPS server certificate. Values pasted from WinSCP logs or certificate thumbprints are normalized before being passed to WinSCP.
 
+.PARAMETER TimeoutSeconds
+WinSCP timeout in seconds. Defaults to the module connection default.
+
+.PARAMETER RetryCount
+Number of additional retry attempts for connection and remote-file check actions. Defaults to the module connection default.
+
+.PARAMETER RetryDelaySeconds
+Delay between retry attempts in seconds. Defaults to the module connection default.
+
 .EXAMPLE
 Test-FtpsRemoteFile -RemoteFileName 'ready.txt' -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com' -HostDirectory '/outbound'
 
@@ -90,7 +99,19 @@ function Test-FtpsRemoteFile {
         [string]$TlsMode,
 
         [Parameter(Mandatory = $false)]
-        [string]$TlsHostCertificateFingerprint
+        [string]$TlsHostCertificateFingerprint,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 100)]
+        [int]$RetryCount,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 86400)]
+        [int]$RetryDelaySeconds
     )
 
     $operationName = 'Test-FtpsRemoteFile'
@@ -110,21 +131,33 @@ function Test-FtpsRemoteFile {
             -TlsMode $TlsMode `
             -TlsHostCertificateFingerprint $TlsHostCertificateFingerprint
 
+        $connectionSettings = Resolve-FtpsConnectionSettings `
+            -BoundParameters $PSBoundParameters `
+            -TimeoutSeconds $TimeoutSeconds `
+            -RetryCount $RetryCount `
+            -RetryDelaySeconds $RetryDelaySeconds
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
             -Username $Username `
             -Password $Password `
             -TlsMode $securitySettings.TlsMode `
-            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint
+            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         $session = New-FtpsSession `
             -LogDirectory $LogDirectory `
             -EnableSessionLog:$EnableSessionLog `
-            -OperationName $operationName
+            -OperationName $operationName `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         Write-Host "Connecting to $HostAddress on port $Port using explicit FTPS..."
-        $session.Open($sessionOptions)
+        Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'Open FTPS session' `
+            -ScriptBlock { $session.Open($sessionOptions) } | Out-Null
 
         Invoke-FtpsSiteCommand `
             -Session $session `
@@ -140,7 +173,11 @@ function Test-FtpsRemoteFile {
         Write-Host $remotePath
 
         try {
-            $fileInfo = $session.GetFileInfo($remotePath)
+            $fileInfo = Invoke-FtpsRetry `
+                -RetryCount $connectionSettings.RetryCount `
+                -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                -OperationName 'Check remote file' `
+                -ScriptBlock { $session.GetFileInfo($remotePath) }
 
             [PSCustomObject]@{
                 Exists         = $true

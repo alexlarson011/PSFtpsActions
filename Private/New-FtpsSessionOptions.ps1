@@ -25,7 +25,11 @@ function New-FtpsSessionOptions {
         [string]$TlsMode = 'Default',
 
         [Parameter(Mandatory = $false)]
-        [string]$TlsHostCertificateFingerprint
+        [string]$TlsHostCertificateFingerprint,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds = 30
     )
 
     $sessionOptions = New-Object WinSCP.SessionOptions -Property @{
@@ -62,6 +66,8 @@ function New-FtpsSessionOptions {
     if (-not [string]::IsNullOrWhiteSpace($normalizedFingerprint)) {
         $sessionOptions.TlsHostCertificateFingerprint = $normalizedFingerprint
     }
+
+    $sessionOptions.Timeout = [TimeSpan]::FromSeconds($TimeoutSeconds)
 
     return $sessionOptions
 }

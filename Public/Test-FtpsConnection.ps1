@@ -41,6 +41,15 @@ Controls WinSCP TLS raw settings. Defaults to the module security default.
 .PARAMETER TlsHostCertificateFingerprint
 Optional TLS host certificate fingerprint to validate the FTPS server certificate. Values pasted from WinSCP logs or certificate thumbprints are normalized before being passed to WinSCP.
 
+.PARAMETER TimeoutSeconds
+WinSCP timeout in seconds. Defaults to the module connection default.
+
+.PARAMETER RetryCount
+Number of additional retry attempts for connection and directory-test actions. Defaults to the module connection default.
+
+.PARAMETER RetryDelaySeconds
+Delay between retry attempts in seconds. Defaults to the module connection default.
+
 .EXAMPLE
 Test-FtpsConnection -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com'
 
@@ -89,7 +98,19 @@ function Test-FtpsConnection {
         [string]$TlsMode,
 
         [Parameter(Mandatory = $false)]
-        [string]$TlsHostCertificateFingerprint
+        [string]$TlsHostCertificateFingerprint,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 86400)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 100)]
+        [int]$RetryCount,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 86400)]
+        [int]$RetryDelaySeconds
     )
 
     $operationName = 'Test-FtpsConnection'
@@ -109,25 +130,37 @@ function Test-FtpsConnection {
             -TlsMode $TlsMode `
             -TlsHostCertificateFingerprint $TlsHostCertificateFingerprint
 
+        $connectionSettings = Resolve-FtpsConnectionSettings `
+            -BoundParameters $PSBoundParameters `
+            -TimeoutSeconds $TimeoutSeconds `
+            -RetryCount $RetryCount `
+            -RetryDelaySeconds $RetryDelaySeconds
+
         $sessionOptions = New-FtpsSessionOptions `
             -HostAddress $HostAddress `
             -Port $Port `
             -Username $Username `
             -Password $Password `
             -TlsMode $securitySettings.TlsMode `
-            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint
+            -TlsHostCertificateFingerprint $securitySettings.TlsHostCertificateFingerprint `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         $session = New-FtpsSession `
             -LogDirectory $LogDirectory `
             -EnableSessionLog:$EnableSessionLog `
-            -OperationName $operationName
+            -OperationName $operationName `
+            -TimeoutSeconds $connectionSettings.TimeoutSeconds
 
         Write-Host "Testing explicit FTPS connection..."
         Write-Host "Host: $HostAddress"
         Write-Host "Port: $Port"
         Write-Host "User: $Username"
 
-        $session.Open($sessionOptions)
+        Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'Open FTPS session' `
+            -ScriptBlock { $session.Open($sessionOptions) } | Out-Null
 
         Write-Host "Connection opened successfully."
 
@@ -142,7 +175,11 @@ function Test-FtpsConnection {
                 Write-Host "Testing MVS dataset prefix:"
                 Write-Host $mvsDatasetPrefix
 
-                $cwdResult = $session.ExecuteCommand("CWD $mvsDatasetPrefix")
+                $cwdResult = Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'Test MVS dataset prefix' `
+                    -ScriptBlock { $session.ExecuteCommand("CWD $mvsDatasetPrefix") }
 
                 if (-not [string]::IsNullOrWhiteSpace($cwdResult.Output)) {
                     Write-Host "CWD output:"
@@ -159,7 +196,11 @@ function Test-FtpsConnection {
                 Write-Host "Testing remote directory:"
                 Write-Host $normalizedDirectory
 
-                $session.ListDirectory($normalizedDirectory) | Out-Null
+                Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'List remote directory' `
+                    -ScriptBlock { $session.ListDirectory($normalizedDirectory) } | Out-Null
             }
         }
 

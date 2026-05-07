@@ -37,6 +37,7 @@ Get-Command -Module PSFtpsActions
 | `Remove-FtpsFile` | Deletes a remote file. |
 | `Test-FtpsRemoteFile` | Checks whether a remote file exists and returns metadata when available. |
 | `Test-FtpsConnection` | Tests the FTPS connection and optionally validates a remote directory or MVS dataset prefix. |
+| `Get-FtpsTlsHostCertificateFingerprint` | Scans an FTPS server TLS certificate fingerprint for certificate pinning. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
 
 Use `Get-Help` for detailed command help:
@@ -62,7 +63,7 @@ Most FTPS commands share these parameters:
 | `LogDirectory` | Optional directory for PowerShell transcript logs. |
 | `EnableSessionLog` | Enables WinSCP session logging. |
 | `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to `Tls12Only`. |
-| `TlsHostCertificateFingerprint` | Optional FTPS server certificate fingerprint. |
+| `TlsHostCertificateFingerprint` | Optional FTPS server certificate fingerprint. Values pasted from WinSCP logs or certificate thumbprints are normalized before use. |
 
 ## Examples
 
@@ -73,6 +74,20 @@ Test-FtpsConnection `
     -Username 'user' `
     -Password 'pass' `
     -HostAddress 'ftps.example.com'
+```
+
+### Scan and pin a TLS certificate fingerprint
+
+```powershell
+$fingerprint = Get-FtpsTlsHostCertificateFingerprint `
+    -HostAddress 'ftps.example.com' |
+    Select-Object -ExpandProperty Fingerprint
+
+Test-FtpsConnection `
+    -Username 'user' `
+    -Password 'pass' `
+    -HostAddress 'ftps.example.com' `
+    -TlsHostCertificateFingerprint $fingerprint
 ```
 
 ### Upload a file
@@ -159,4 +174,12 @@ Send-FtpsFile `
 
 The module defaults to `Tls12Only`, which sets both minimum and maximum TLS version to TLS 1.2 through WinSCP raw settings. Use `Tls12OrHigher` when the server supports newer TLS versions, or `Default` to let WinSCP choose.
 
-When your server requires certificate pinning, pass `-TlsHostCertificateFingerprint`.
+When your server requires certificate pinning, use `Get-FtpsTlsHostCertificateFingerprint` to scan the server certificate, verify the returned value through your normal trust process, then pass it to `-TlsHostCertificateFingerprint`.
+
+The fingerprint parameter accepts WinSCP-style values such as:
+
+```text
+SHA-256: 00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff
+```
+
+It also normalizes common pasted forms, including bracketed WinSCP log output and plain certificate thumbprints.

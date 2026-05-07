@@ -57,8 +57,10 @@ function New-FtpsSessionOptions {
         }
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($TlsHostCertificateFingerprint)) {
-        $sessionOptions.TlsHostCertificateFingerprint = $TlsHostCertificateFingerprint
+    $normalizedFingerprint = Normalize-TlsHostCertificateFingerprint -Fingerprint $TlsHostCertificateFingerprint
+
+    if (-not [string]::IsNullOrWhiteSpace($normalizedFingerprint)) {
+        $sessionOptions.TlsHostCertificateFingerprint = $normalizedFingerprint
     }
 
     return $sessionOptions

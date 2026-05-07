@@ -16,5 +16,6 @@ Export-ModuleMember -Function @(
     'Remove-FtpsFile',
     'Test-FtpsRemoteFile',
     'Get-TDayFileName',
-    'Test-FtpsConnection'
+    'Test-FtpsConnection',
+    'Get-FtpsTlsHostCertificateFingerprint'
 )

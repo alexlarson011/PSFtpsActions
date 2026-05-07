@@ -42,7 +42,7 @@ Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the tem
 Controls WinSCP TLS raw settings. Defaults to Tls12Only.
 
 .PARAMETER TlsHostCertificateFingerprint
-Optional TLS host certificate fingerprint to validate the FTPS server certificate.
+Optional TLS host certificate fingerprint to validate the FTPS server certificate. Values pasted from WinSCP logs or certificate thumbprints are normalized before being passed to WinSCP.
 
 .EXAMPLE
 Remove-FtpsFile -RemoteFileName 'processed.txt' -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com' -HostDirectory '/archive'

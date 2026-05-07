@@ -1,3 +1,68 @@
+<#
+.SYNOPSIS
+Downloads a file from an explicit FTPS endpoint.
+
+.DESCRIPTION
+Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the remote location, and downloads a file in ASCII transfer mode. Supports standard FTP paths and MVS dataset-prefix navigation. Can optionally remove the remote file after a successful download.
+
+.PARAMETER RemoteFileName
+Name of the remote file or MVS member/data set name to download.
+
+.PARAMETER LocalDirectory
+Existing local directory where the downloaded file should be saved.
+
+.PARAMETER LocalFileName
+Optional local file name. When omitted, RemoteFileName is used.
+
+.PARAMETER Username
+FTPS username.
+
+.PARAMETER Password
+FTPS password.
+
+.PARAMETER HostAddress
+FTPS server host name or IP address.
+
+.PARAMETER Port
+FTPS server port. Defaults to 21.
+
+.PARAMETER HostDirectory
+Remote directory for standard FTPS paths, or MVS dataset prefix when MvsMode is used.
+
+.PARAMETER SiteCommand
+Optional SITE command to send after connecting and before file operations.
+
+.PARAMETER MvsMode
+Uses MVS dataset-prefix navigation and file commands instead of standard FTP path concatenation.
+
+.PARAMETER DeleteRemoteAfterDownload
+Deletes the remote file after the download succeeds.
+
+.PARAMETER WinScpDllPath
+Path to WinSCPnet.dll. Defaults to the bundled assembly under the module's lib folder.
+
+.PARAMETER LogDirectory
+Optional directory for PowerShell transcript logs.
+
+.PARAMETER EnableSessionLog
+Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the temp directory.
+
+.PARAMETER TlsMode
+Controls WinSCP TLS raw settings. Defaults to Tls12Only.
+
+.PARAMETER TlsHostCertificateFingerprint
+Optional TLS host certificate fingerprint to validate the FTPS server certificate.
+
+.EXAMPLE
+Get-FtpsFile -RemoteFileName 'inbound.txt' -LocalDirectory 'C:\Temp' -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com' -HostDirectory '/outbound'
+
+Downloads /outbound/inbound.txt to C:\Temp\inbound.txt.
+
+.EXAMPLE
+Get-FtpsFile -RemoteFileName 'REPORT.TXT' -LocalDirectory 'C:\Temp' -Username 'user' -Password 'pass' -HostAddress 'mvs.example.com' -HostDirectory 'HLQ.APP.DATA' -MvsMode -DeleteRemoteAfterDownload
+
+Changes to the MVS dataset prefix and downloads REPORT.TXT, then deletes the remote file after a successful transfer.
+#>
 function Get-FtpsFile {
     [CmdletBinding()]
     param (

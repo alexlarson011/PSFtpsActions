@@ -1,3 +1,59 @@
+<#
+.SYNOPSIS
+Deletes a file from an explicit FTPS endpoint.
+
+.DESCRIPTION
+Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the remote location, and removes the target file. In MVS mode, the command changes to the dataset prefix and deletes the named file with DELE.
+
+.PARAMETER RemoteFileName
+Name of the remote file or MVS member/data set name to delete.
+
+.PARAMETER Username
+FTPS username.
+
+.PARAMETER Password
+FTPS password.
+
+.PARAMETER HostAddress
+FTPS server host name or IP address.
+
+.PARAMETER Port
+FTPS server port. Defaults to 21.
+
+.PARAMETER HostDirectory
+Remote directory for standard FTPS paths, or MVS dataset prefix when MvsMode is used.
+
+.PARAMETER SiteCommand
+Optional SITE command to send after connecting and before file operations.
+
+.PARAMETER MvsMode
+Uses MVS dataset-prefix navigation and a DELE command instead of standard FTP path removal.
+
+.PARAMETER WinScpDllPath
+Path to WinSCPnet.dll. Defaults to the bundled assembly under the module's lib folder.
+
+.PARAMETER LogDirectory
+Optional directory for PowerShell transcript logs.
+
+.PARAMETER EnableSessionLog
+Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the temp directory.
+
+.PARAMETER TlsMode
+Controls WinSCP TLS raw settings. Defaults to Tls12Only.
+
+.PARAMETER TlsHostCertificateFingerprint
+Optional TLS host certificate fingerprint to validate the FTPS server certificate.
+
+.EXAMPLE
+Remove-FtpsFile -RemoteFileName 'processed.txt' -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com' -HostDirectory '/archive'
+
+Deletes /archive/processed.txt.
+
+.EXAMPLE
+Remove-FtpsFile -RemoteFileName 'REPORT.TXT' -Username 'user' -Password 'pass' -HostAddress 'mvs.example.com' -HostDirectory 'HLQ.APP.DATA' -MvsMode
+
+Changes to the MVS dataset prefix and deletes REPORT.TXT.
+#>
 function Remove-FtpsFile {
     [CmdletBinding()]
     param (

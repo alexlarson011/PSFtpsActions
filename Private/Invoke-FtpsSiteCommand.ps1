@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+Runs an optional SITE command on an open WinSCP session.
+
+.DESCRIPTION
+Skips empty commands, writes any command output to the host, and throws when the server returns a non-zero exit code.
+#>
 function Invoke-FtpsSiteCommand {
     [CmdletBinding()]
     param (

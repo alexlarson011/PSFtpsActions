@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+Starts a transcript log for an FTPS operation.
+
+.DESCRIPTION
+Creates the requested log directory when needed, starts a timestamped PowerShell transcript, writes the transcript path, and returns the log path.
+#>
 function Start-FtpsTranscript {
     [CmdletBinding()]
     param (

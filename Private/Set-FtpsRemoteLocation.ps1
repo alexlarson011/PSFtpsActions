@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+Resolves the remote file location for an FTPS operation.
+
+.DESCRIPTION
+For standard FTPS paths, normalizes the host directory and appends the remote file name. For MVS mode, changes the session to the normalized dataset prefix and returns the remote file name for the operation.
+#>
 function Set-FtpsRemoteLocation {
     [CmdletBinding()]
     param (

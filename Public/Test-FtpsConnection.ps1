@@ -1,3 +1,56 @@
+<#
+.SYNOPSIS
+Tests an explicit FTPS connection and optional remote location.
+
+.DESCRIPTION
+Opens an FTPS session using the bundled WinSCP .NET assembly, optionally sends a SITE command, and optionally validates a host directory or MVS dataset prefix. Returns a structured object with success status and connection details instead of throwing for connection test failures.
+
+.PARAMETER Username
+FTPS username.
+
+.PARAMETER Password
+FTPS password.
+
+.PARAMETER HostAddress
+FTPS server host name or IP address.
+
+.PARAMETER Port
+FTPS server port. Defaults to 21.
+
+.PARAMETER HostDirectory
+Optional remote directory or MVS dataset prefix to validate after connecting.
+
+.PARAMETER SiteCommand
+Optional SITE command to send after connecting.
+
+.PARAMETER MvsMode
+Treats HostDirectory as an MVS dataset prefix and validates it with CWD.
+
+.PARAMETER WinScpDllPath
+Path to WinSCPnet.dll. Defaults to the bundled assembly under the module's lib folder.
+
+.PARAMETER LogDirectory
+Optional directory for PowerShell transcript logs.
+
+.PARAMETER EnableSessionLog
+Enables a WinSCP session log. Uses LogDirectory when provided, otherwise the temp directory.
+
+.PARAMETER TlsMode
+Controls WinSCP TLS raw settings. Defaults to Tls12Only.
+
+.PARAMETER TlsHostCertificateFingerprint
+Optional TLS host certificate fingerprint to validate the FTPS server certificate.
+
+.EXAMPLE
+Test-FtpsConnection -Username 'user' -Password 'pass' -HostAddress 'ftps.example.com'
+
+Tests whether the server accepts an explicit FTPS connection.
+
+.EXAMPLE
+Test-FtpsConnection -Username 'user' -Password 'pass' -HostAddress 'mvs.example.com' -HostDirectory 'HLQ.APP.DATA' -MvsMode
+
+Tests the connection and validates the MVS dataset prefix.
+#>
 function Test-FtpsConnection {
     [CmdletBinding()]
     param (

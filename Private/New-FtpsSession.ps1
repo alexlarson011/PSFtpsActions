@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+Creates a WinSCP session for an FTPS operation.
+
+.DESCRIPTION
+Creates a WinSCP.Session object and, when requested, configures a WinSCP session log in the provided log directory or in the temp directory.
+#>
 function New-FtpsSession {
     [CmdletBinding()]
     param (

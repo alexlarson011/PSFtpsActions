@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+Builds WinSCP session options for explicit FTPS.
+
+.DESCRIPTION
+Creates a WinSCP.SessionOptions object with FTP protocol, explicit FTPS, passive mode, credentials, port, and optional TLS version and certificate fingerprint settings.
+#>
 function New-FtpsSessionOptions {
     [CmdletBinding()]
     param (

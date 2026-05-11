@@ -29,6 +29,7 @@ Load-PSFtpsCredentialStore
 Export-ModuleMember -Function @(
     'Send-FtpsFile',
     'Get-FtpsFile',
+    'Get-FtpsChildItem',
     'Remove-FtpsFile',
     'Test-FtpsRemoteFile',
     'Get-TDayFileName',

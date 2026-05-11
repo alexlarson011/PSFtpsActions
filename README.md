@@ -33,6 +33,7 @@ Get-Command -Module PSFtpsActions
 | Command | Description |
 | --- | --- |
 | `Send-FtpsFile` | Uploads a local file using explicit FTPS. |
+| `Get-FtpsChildItem` | Lists files and directories from an explicit FTPS endpoint. |
 | `Get-FtpsFile` | Downloads a remote file using explicit FTPS. |
 | `Remove-FtpsFile` | Deletes a remote file. |
 | `Test-FtpsRemoteFile` | Checks whether a remote file exists and returns metadata when available. |
@@ -142,6 +143,36 @@ Send-FtpsFile `
     -Password 'pass' `
     -HostAddress 'ftps.example.com' `
     -HostDirectory '/inbound'
+```
+
+### List remote items
+
+```powershell
+Get-FtpsChildItem `
+    -CredentialName 'partner-ftps' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/outbound'
+```
+
+Filter by name or return only names:
+
+```powershell
+Get-FtpsChildItem `
+    -CredentialName 'partner-ftps' `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/outbound' `
+    -Filter 'T*' `
+    -Name
+```
+
+List an MVS dataset prefix:
+
+```powershell
+Get-FtpsChildItem `
+    -CredentialName 'mainframe' `
+    -HostAddress 'mvs.example.com' `
+    -HostDirectory 'HLQ.APP.DATA' `
+    -MvsMode
 ```
 
 ### Upload as normalized text

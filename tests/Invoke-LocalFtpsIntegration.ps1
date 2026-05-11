@@ -166,6 +166,8 @@ try {
     $uploadPath = Join-Path $localDir 'upload.txt'
     $downloadPath = Join-Path $downloadDir 'downloaded.txt'
     Set-Content -LiteralPath $uploadPath -Value 'PSFtpsActions local FTPS integration test' -NoNewline
+    New-Item -ItemType Directory -Path (Join-Path $ftpRoot 'archive') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $ftpRoot 'T002') -Value 'second test file' -NoNewline
 
     Send-FtpsFile `
         -FilePath $uploadPath `
@@ -177,6 +179,44 @@ try {
         -HostDirectory '/' `
         -TlsMode Default `
         -TlsHostCertificateFingerprint $scanned.Fingerprint
+
+    $listedItems = Get-FtpsChildItem `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    Assert-True -Condition (@($listedItems | Where-Object Name -eq 'upload.txt').Count -eq 1) -Message 'Get-FtpsChildItem did not list upload.txt.'
+    Assert-True -Condition (@($listedItems | Where-Object Name -eq 'archive').Count -eq 1) -Message 'Get-FtpsChildItem did not list archive directory.'
+
+    $nameOnlyItems = Get-FtpsChildItem `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -Filter 'T*' `
+        -Name
+
+    Assert-True -Condition ($nameOnlyItems -contains 'T002') -Message 'Get-FtpsChildItem -Name did not return filtered item T002.'
+
+    $fileItems = Get-FtpsChildItem `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -File
+
+    Assert-True -Condition (@($fileItems | Where-Object Name -eq 'upload.txt').Count -eq 1) -Message 'Get-FtpsChildItem -File did not include upload.txt.'
+    Assert-True -Condition (@($fileItems | Where-Object Name -eq 'archive').Count -eq 0) -Message 'Get-FtpsChildItem -File included a directory.'
+
+    $directoryItems = Get-FtpsChildItem `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -Directory
+
+    Assert-True -Condition (@($directoryItems | Where-Object Name -eq 'archive').Count -eq 1) -Message 'Get-FtpsChildItem -Directory did not include archive directory.'
 
     $remoteInfo = Test-FtpsRemoteFile `
         -RemoteFileName 'upload.txt' `

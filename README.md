@@ -45,6 +45,8 @@ Get-Command -Module PSFtpsActions
 | `Set-PSFtpsCredential` | Stores a named PSCredential in memory for the current PowerShell session. |
 | `Get-PSFtpsCredential` | Lists named credentials stored in memory. |
 | `Remove-PSFtpsCredential` | Removes a named credential from memory. |
+| `Get-PSFtpsActionsStoragePath` | Shows local config and credential storage paths. |
+| `Set-PSFtpsActionsStoragePath` | Changes local config and credential storage paths for the current session. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
 
 Use `Get-Help` for detailed command help:
@@ -114,7 +116,7 @@ Send-FtpsFile `
     -HostDirectory '/inbound'
 ```
 
-The credential store is in memory only. It is not written to disk and lasts only for the current PowerShell session.
+By default, credentials are stored under `%APPDATA%\PSFtpsActions\Credentials` as CLIXML. On Windows, exported PSCredential secrets are protected by DPAPI for the current Windows user.
 
 ### Scan and pin a TLS certificate fingerprint
 
@@ -294,6 +296,35 @@ Send-FtpsFile `
     -TimeoutSeconds 60 `
     -RetryCount 2 `
     -RetryDelaySeconds 10
+```
+
+## Local Storage
+
+The module stores config and named credentials locally by default:
+
+```powershell
+Get-PSFtpsActionsStoragePath
+```
+
+Fresh module sessions use:
+
+```text
+%APPDATA%\PSFtpsActions\config.json
+%APPDATA%\PSFtpsActions\Credentials
+```
+
+Use a different local folder for the current PowerShell session:
+
+```powershell
+Set-PSFtpsActionsStoragePath -StorageRoot 'C:\Secure\PSFtpsActions'
+```
+
+Or set the paths independently:
+
+```powershell
+Set-PSFtpsActionsStoragePath `
+    -ConfigPath 'C:\Secure\PSFtpsActions\config.json' `
+    -CredentialStorePath 'C:\Secure\PSFtpsActions\Credentials'
 ```
 
 ## TLS Notes

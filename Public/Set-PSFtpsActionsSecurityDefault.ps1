@@ -3,7 +3,7 @@
 Sets module default FTPS security settings.
 
 .DESCRIPTION
-Updates the script-scoped FTPS security defaults used by module commands when TlsMode or TlsHostCertificateFingerprint are omitted. These defaults apply to the current PowerShell session.
+Updates the FTPS security defaults used by module commands when TlsMode or TlsHostCertificateFingerprint are omitted. Defaults are saved to the configured local config path.
 
 .PARAMETER TlsMode
 Default TLS behavior. Default lets WinSCP choose. Tls12Only constrains connections to TLS 1.2. Tls12OrHigher requires TLS 1.2 or newer.
@@ -49,6 +49,8 @@ function Set-PSFtpsActionsSecurityDefault {
     elseif ($PSBoundParameters.ContainsKey('TlsHostCertificateFingerprint')) {
         $script:PSFtpsActionsSecurityDefault.TlsHostCertificateFingerprint = Normalize-TlsHostCertificateFingerprint -Fingerprint $TlsHostCertificateFingerprint
     }
+
+    Save-PSFtpsActionsConfig
 
     Get-PSFtpsActionsSecurityDefault
 }

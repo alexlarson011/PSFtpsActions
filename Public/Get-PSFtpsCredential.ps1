@@ -3,7 +3,7 @@
 Gets named credentials from the module credential store.
 
 .DESCRIPTION
-Returns credential metadata from the module's in-memory credential store. Use IncludeCredential to return the PSCredential object.
+Returns credential metadata from the module's credential store. Use IncludeCredential to return the PSCredential object.
 
 .PARAMETER Name
 Optional credential name to retrieve. When omitted, all stored credential names are returned.
@@ -38,6 +38,7 @@ function Get-PSFtpsCredential {
         $properties = [ordered]@{
             Name     = $credentialName
             Username = $credential.UserName
+            Path     = Get-PSFtpsCredentialFilePath -Name $credentialName
         }
 
         if ($IncludeCredential) {

@@ -3,7 +3,7 @@
 Sets module default FTPS connection settings.
 
 .DESCRIPTION
-Updates the script-scoped timeout and retry defaults used by module commands when TimeoutSeconds, RetryCount, or RetryDelaySeconds are omitted. These defaults apply to the current PowerShell session.
+Updates the timeout and retry defaults used by module commands when TimeoutSeconds, RetryCount, or RetryDelaySeconds are omitted. Defaults are saved to the configured local config path.
 
 .PARAMETER TimeoutSeconds
 Default WinSCP timeout in seconds. Defaults to 30 in a fresh module session.
@@ -41,6 +41,8 @@ function Set-PSFtpsActionsConnectionDefault {
     if ($PSBoundParameters.ContainsKey('RetryDelaySeconds')) {
         $script:PSFtpsActionsConnectionDefault.RetryDelaySeconds = $RetryDelaySeconds
     }
+
+    Save-PSFtpsActionsConfig
 
     Get-PSFtpsActionsConnectionDefault
 }

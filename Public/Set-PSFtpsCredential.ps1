@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Stores a named PSCredential for the current module session.
+Stores a named PSCredential.
 
 .DESCRIPTION
-Adds or replaces a named PSCredential in the module's in-memory credential store. The credential is not written to disk and lasts only for the current PowerShell session.
+Adds or replaces a named PSCredential in the module credential store and saves it to the configured local credential store path.
 
 .PARAMETER Name
 Name used to retrieve the credential.
@@ -23,9 +23,11 @@ function Set-PSFtpsCredential {
     )
 
     $script:PSFtpsActionsCredentialStore[$Name] = $Credential
+    Save-PSFtpsCredential -Name $Name -Credential $Credential
 
     [PSCustomObject]@{
         Name     = $Name
         Username = $Credential.UserName
+        Path     = Get-PSFtpsCredentialFilePath -Name $Name
     }
 }

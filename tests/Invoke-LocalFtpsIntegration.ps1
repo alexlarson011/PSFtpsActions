@@ -17,6 +17,7 @@ $readyFile = Join-Path $testRoot 'server-ready.json'
 $downloadDir = Join-Path $testRoot 'downloads'
 $localDir = Join-Path $testRoot 'local'
 $logDir = Join-Path $testRoot 'logs'
+$storageRoot = Join-Path $testRoot 'storage'
 
 $serverProcess = $null
 
@@ -71,6 +72,7 @@ try {
     $server = Get-Content -LiteralPath $readyFile -Raw | ConvertFrom-Json
 
     Import-Module $moduleManifest -Force
+    Set-PSFtpsActionsStoragePath -StorageRoot $storageRoot | Out-Null
 
     Write-Host "Local FTPS server: $($server.host):$($server.port)"
 
@@ -94,6 +96,7 @@ try {
     $configuredSecurity = Get-PSFtpsActionsSecurityDefault
     Assert-True -Condition ($configuredSecurity.TlsMode -eq 'Default') -Message 'Configured TLS mode default was not Default.'
     Assert-True -Condition ($configuredSecurity.TlsHostCertificateFingerprint -eq $scanned.Fingerprint) -Message 'Configured TLS fingerprint default did not match the scanned fingerprint.'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $storageRoot 'config.json')) -Message 'Config file was not saved to the configured storage root.'
 
     $defaultConnectionSettings = Get-PSFtpsActionsConnectionDefault
     Assert-True -Condition ($defaultConnectionSettings.TimeoutSeconds -eq 30) -Message 'Built-in timeout default was not 30 seconds.'
@@ -129,6 +132,7 @@ try {
     $storedCredential = Get-PSFtpsCredential -Name 'local-ftps'
     Assert-True -Condition ($storedCredential.Name -eq 'local-ftps') -Message 'Stored credential name was not returned.'
     Assert-True -Condition ($storedCredential.Username -eq $server.username) -Message 'Stored credential username did not match.'
+    Assert-True -Condition (Test-Path -LiteralPath $storedCredential.Path) -Message 'Stored credential file was not created.'
 
     $credentialConnection = Test-FtpsConnection `
         -Credential $testCredential `

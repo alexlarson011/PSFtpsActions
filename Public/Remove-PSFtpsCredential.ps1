@@ -3,7 +3,7 @@
 Removes a named credential from the module credential store.
 
 .DESCRIPTION
-Deletes a named credential from the module's in-memory credential store for the current PowerShell session.
+Deletes a named credential from the module credential store and removes its local credential file when present.
 
 .PARAMETER Name
 Name of the credential to remove.
@@ -21,4 +21,9 @@ function Remove-PSFtpsCredential {
     }
 
     $script:PSFtpsActionsCredentialStore.Remove($Name)
+
+    $credentialPath = Get-PSFtpsCredentialFilePath -Name $Name
+    if (Test-Path -LiteralPath $credentialPath) {
+        Remove-Item -LiteralPath $credentialPath -Force
+    }
 }

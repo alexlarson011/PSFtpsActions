@@ -12,7 +12,7 @@ Name of the remote file or MVS member/data set name to check.
 FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password. Use with Username, or use Credential/CredentialName instead.
+Legacy plain-text FTPS password. Use with Username; prefer Credential or CredentialName when possible.
 
 .PARAMETER Credential
 PSCredential containing the FTPS username and password.
@@ -185,18 +185,53 @@ function Test-FtpsRemoteFile {
             -Session $session `
             -HostDirectory $HostDirectory `
             -RemoteFileName $RemoteFileName `
-            -MvsMode:$MvsMode
+            -MvsMode:$MvsMode `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds
 
         Write-Host "Checking remote file:"
         Write-Host $remotePath
 
-        try {
-            $fileInfo = Invoke-FtpsRetry `
+        if ($MvsMode) {
+            $lookupDirectory = '.'
+            $lookupName = $RemoteFileName
+        }
+        else {
+            $lookupDirectory = [WinSCP.RemotePath]::GetDirectoryName($remotePath)
+            $lookupName = [WinSCP.RemotePath]::GetFileName($remotePath)
+        }
+
+        $directoryInfo = Invoke-FtpsRetry `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+            -OperationName 'List remote directory for file check' `
+            -ScriptBlock { $session.ListDirectory($lookupDirectory) }
+
+        $fileInfo = @(
+            $directoryInfo.Files | Where-Object {
+                [string]::Equals($_.Name, $lookupName, [System.StringComparison]::Ordinal)
+            }
+        ) | Select-Object -First 1
+
+        if ($null -eq $fileInfo) {
+            # A server can resolve names case-insensitively while returning its stored casing in LIST.
+            # Ask the server before concluding that a differently-cased or unlisted path is absent.
+            $serverResolvedExists = Invoke-FtpsRetry `
                 -RetryCount $connectionSettings.RetryCount `
                 -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
-                -OperationName 'Check remote file' `
-                -ScriptBlock { $session.GetFileInfo($remotePath) }
+                -OperationName 'Resolve remote file existence' `
+                -ScriptBlock { $session.FileExists($remotePath) }
 
+            if ($serverResolvedExists) {
+                $fileInfo = Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'Get remote file metadata' `
+                    -ScriptBlock { $session.GetFileInfo($remotePath) }
+            }
+        }
+
+        if ($null -ne $fileInfo) {
             [PSCustomObject]@{
                 Exists         = $true
                 RemoteFileName = $RemoteFileName
@@ -207,7 +242,7 @@ function Test-FtpsRemoteFile {
                 MvsMode        = [bool]$MvsMode
             }
         }
-        catch {
+        else {
             [PSCustomObject]@{
                 Exists         = $false
                 RemoteFileName = $RemoteFileName

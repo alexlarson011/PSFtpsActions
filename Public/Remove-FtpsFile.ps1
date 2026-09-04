@@ -12,7 +12,7 @@ Name of the remote file or MVS member/data set name to delete.
 FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password. Use with Username, or use Credential/CredentialName instead.
+Legacy plain-text FTPS password. Use with Username; prefer Credential or CredentialName when possible.
 
 .PARAMETER Credential
 PSCredential containing the FTPS username and password.
@@ -70,7 +70,7 @@ Remove-FtpsFile -RemoteFileName 'REPORT.TXT' -Username 'user' -Password 'pass' -
 Changes to the MVS dataset prefix and deletes REPORT.TXT.
 #>
 function Remove-FtpsFile {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param (
         [Parameter(Mandatory = $true)]
         [string]$RemoteFileName,
@@ -136,6 +136,11 @@ function Remove-FtpsFile {
     $session = $null
 
     try {
+        $deleteTarget = "${HostAddress}:$Port $HostDirectory/$RemoteFileName"
+        if (-not $PSCmdlet.ShouldProcess($deleteTarget, 'Delete remote FTPS file')) {
+            return
+        }
+
         if (-not [string]::IsNullOrWhiteSpace($LogDirectory)) {
             Start-FtpsTranscript -LogDirectory $LogDirectory -OperationName $operationName | Out-Null
             $transcriptStarted = $true
@@ -190,7 +195,9 @@ function Remove-FtpsFile {
             -Session $session `
             -HostDirectory $HostDirectory `
             -RemoteFileName $RemoteFileName `
-            -MvsMode:$MvsMode
+            -MvsMode:$MvsMode `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds
 
         Write-Host "Deleting remote file:"
         Write-Host $remotePath
@@ -203,24 +210,28 @@ function Remove-FtpsFile {
                 -RetryCount $connectionSettings.RetryCount `
                 -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
                 -OperationName 'Delete MVS remote file' `
-                -ScriptBlock { $session.ExecuteCommand("DELE $RemoteFileName") }
+                -ScriptBlock {
+                    $result = $session.ExecuteCommand("DELE $RemoteFileName")
+
+                    if ($result.ExitCode -ne 0) {
+                        throw "MVS remote delete failed. ExitCode=$($result.ExitCode). Output: $($result.Output)"
+                    }
+
+                    return $result
+                }
 
             if (-not [string]::IsNullOrWhiteSpace($deleteResult.Output)) {
                 Write-Host "Delete output:"
                 Write-Host $deleteResult.Output
             }
 
-            if ($deleteResult.ExitCode -ne 0) {
-                throw "MVS remote delete failed. ExitCode=$($deleteResult.ExitCode). Output: $($deleteResult.Output)"
-            }
         }
         else {
-            $removeResult = Invoke-FtpsRetry `
+            Invoke-FtpsRetry `
                 -RetryCount $connectionSettings.RetryCount `
                 -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
                 -OperationName 'Delete remote file' `
-                -ScriptBlock { $session.RemoveFiles($remotePath) }
-            $removeResult.Check()
+                -ScriptBlock { $session.RemoveFile($remotePath) } | Out-Null
         }
 
         Write-Host "Remote file deleted successfully."

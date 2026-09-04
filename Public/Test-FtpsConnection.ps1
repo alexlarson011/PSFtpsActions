@@ -9,7 +9,7 @@ Opens an FTPS session using the bundled WinSCP .NET assembly, optionally sends a
 FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password. Use with Username, or use Credential/CredentialName instead.
+Legacy plain-text FTPS password. Use with Username; prefer Credential or CredentialName when possible.
 
 .PARAMETER Credential
 PSCredential containing the FTPS username and password.
@@ -199,16 +199,21 @@ function Test-FtpsConnection {
                     -RetryCount $connectionSettings.RetryCount `
                     -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
                     -OperationName 'Test MVS dataset prefix' `
-                    -ScriptBlock { $session.ExecuteCommand("CWD $mvsDatasetPrefix") }
+                    -ScriptBlock {
+                        $result = $session.ExecuteCommand("CWD $mvsDatasetPrefix")
+
+                        if ($result.ExitCode -ne 0) {
+                            throw "MVS CWD failed. ExitCode=$($result.ExitCode). Output: $($result.Output)"
+                        }
+
+                        return $result
+                    }
 
                 if (-not [string]::IsNullOrWhiteSpace($cwdResult.Output)) {
                     Write-Host "CWD output:"
                     Write-Host $cwdResult.Output
                 }
 
-                if ($cwdResult.ExitCode -ne 0) {
-                    throw "MVS CWD failed. ExitCode=$($cwdResult.ExitCode). Output: $($cwdResult.Output)"
-                }
             }
             else {
                 $normalizedDirectory = Normalize-RemoteDirectory -Directory $HostDirectory

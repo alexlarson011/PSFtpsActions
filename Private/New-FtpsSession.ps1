@@ -23,6 +23,11 @@ function New-FtpsSession {
     )
 
     $session = New-Object WinSCP.Session
+
+    if (-not [string]::IsNullOrWhiteSpace($script:CurrentWinScpExePath)) {
+        $session.ExecutablePath = $script:CurrentWinScpExePath
+    }
+
     $session.Timeout = [TimeSpan]::FromSeconds($TimeoutSeconds)
 
     if ($EnableSessionLog) {

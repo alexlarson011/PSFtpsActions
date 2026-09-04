@@ -9,7 +9,7 @@ Deletes a named credential from the module credential store and removes its loca
 Name of the credential to remove.
 #>
 function Remove-PSFtpsCredential {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param (
         [Parameter(Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
@@ -20,10 +20,14 @@ function Remove-PSFtpsCredential {
         throw "No PSFtpsActions credential named '$Name' was found."
     }
 
-    $script:PSFtpsActionsCredentialStore.Remove($Name)
+    if (-not $PSCmdlet.ShouldProcess($Name, 'Remove stored PSFtpsActions credential')) {
+        return
+    }
 
     $credentialPath = Get-PSFtpsCredentialFilePath -Name $Name
     if (Test-Path -LiteralPath $credentialPath) {
-        Remove-Item -LiteralPath $credentialPath -Force
+        Remove-Item -LiteralPath $credentialPath -Force -ErrorAction Stop
     }
+
+    [void]$script:PSFtpsActionsCredentialStore.Remove($Name)
 }

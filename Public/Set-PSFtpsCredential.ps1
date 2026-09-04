@@ -22,8 +22,8 @@ function Set-PSFtpsCredential {
         [pscredential]$Credential
     )
 
-    $script:PSFtpsActionsCredentialStore[$Name] = $Credential
     Save-PSFtpsCredential -Name $Name -Credential $Credential
+    $script:PSFtpsActionsCredentialStore[$Name] = $Credential
 
     [PSCustomObject]@{
         Name     = $Name

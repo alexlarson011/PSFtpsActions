@@ -3,7 +3,7 @@
 Downloads a file from an explicit FTPS endpoint.
 
 .DESCRIPTION
-Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the remote location, and downloads a file in ASCII transfer mode. Supports standard FTP paths and MVS dataset-prefix navigation. Can optionally remove the remote file after a successful download.
+Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the remote location, and downloads a file. Supports standard FTP paths and MVS dataset-prefix navigation. Can optionally remove the remote file after a successful download.
 
 .PARAMETER RemoteFileName
 Name of the remote file or MVS member/data set name to download.
@@ -18,7 +18,7 @@ Optional local file name. When omitted, RemoteFileName is used.
 FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password. Use with Username, or use Credential/CredentialName instead.
+Legacy plain-text FTPS password. Use with Username; prefer Credential or CredentialName when possible.
 
 .PARAMETER Credential
 PSCredential containing the FTPS username and password.
@@ -43,6 +43,9 @@ Uses MVS dataset-prefix navigation and file commands instead of standard FTP pat
 
 .PARAMETER DeleteRemoteAfterDownload
 Deletes the remote file after the download succeeds.
+
+.PARAMETER TransferMode
+WinSCP transfer mode. Ascii preserves the module's historical behavior. Binary transfers bytes unchanged. Automatic lets WinSCP choose from the file name.
 
 .PARAMETER WinScpDllPath
 Path to WinSCPnet.dll. Defaults to the bundled assembly under the module's lib folder.
@@ -79,7 +82,7 @@ Get-FtpsFile -RemoteFileName 'REPORT.TXT' -LocalDirectory 'C:\Temp' -Username 'u
 Changes to the MVS dataset prefix and downloads REPORT.TXT, then deletes the remote file after a successful transfer.
 #>
 function Get-FtpsFile {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param (
         [Parameter(Mandatory = $true)]
         [string]$RemoteFileName,
@@ -121,6 +124,10 @@ function Get-FtpsFile {
         [switch]$DeleteRemoteAfterDownload,
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet('Ascii', 'Binary', 'Automatic')]
+        [string]$TransferMode = 'Ascii',
+
+        [Parameter(Mandatory = $false)]
         [string]$WinScpDllPath = $script:DefaultWinScpDllPath,
 
         [Parameter(Mandatory = $false)]
@@ -152,24 +159,54 @@ function Get-FtpsFile {
     $operationName = 'Get-FtpsFile'
     $transcriptStarted = $false
     $session = $null
+    $temporaryDownloadPath = $null
 
     try {
-        if (-not [string]::IsNullOrWhiteSpace($LogDirectory)) {
-            Start-FtpsTranscript -LogDirectory $LogDirectory -OperationName $operationName | Out-Null
-            $transcriptStarted = $true
-        }
-
-        if (-not (Test-Path -LiteralPath $LocalDirectory)) {
+        if (-not (Test-Path -LiteralPath $LocalDirectory -PathType Container)) {
             throw "Local directory not found: $LocalDirectory"
         }
-
-        Import-WinScpAssembly -WinScpDllPath $WinScpDllPath
 
         if ([string]::IsNullOrWhiteSpace($LocalFileName)) {
             $LocalFileName = $RemoteFileName
         }
 
-        $localPath = Join-Path $LocalDirectory $LocalFileName
+        if ([System.IO.Path]::IsPathRooted($LocalFileName)) {
+            throw "LocalFileName must be relative to LocalDirectory: $LocalFileName"
+        }
+
+        $localDirectoryPath = (Get-Item -LiteralPath $LocalDirectory).FullName
+        $trimCharacters = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        $localDirectoryPrefix = $localDirectoryPath.TrimEnd($trimCharacters) + [System.IO.Path]::DirectorySeparatorChar
+        $localPath = [System.IO.Path]::GetFullPath((Join-Path $localDirectoryPath $LocalFileName))
+
+        if (-not $localPath.StartsWith($localDirectoryPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "LocalFileName must resolve inside LocalDirectory: $LocalFileName"
+        }
+
+        $destinationDirectory = Split-Path -Parent $localPath
+        if (-not (Test-Path -LiteralPath $destinationDirectory -PathType Container)) {
+            throw "Local destination directory not found: $destinationDirectory"
+        }
+
+        if (Test-Path -LiteralPath $localPath -PathType Container) {
+            throw "Local destination is a directory: $localPath"
+        }
+
+        $downloadAction = "Download '$RemoteFileName' from $HostAddress using $TransferMode transfer mode"
+        if ($DeleteRemoteAfterDownload) {
+            $downloadAction += ' and request remote deletion after the local file is committed'
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($localPath, $downloadAction)) {
+            return
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($LogDirectory)) {
+            Start-FtpsTranscript -LogDirectory $LogDirectory -OperationName $operationName | Out-Null
+            $transcriptStarted = $true
+        }
+
+        Import-WinScpAssembly -WinScpDllPath $WinScpDllPath
 
         $securitySettings = Resolve-FtpsSecuritySettings `
             -BoundParameters $PSBoundParameters `
@@ -218,15 +255,19 @@ function Get-FtpsFile {
             -Session $session `
             -HostDirectory $HostDirectory `
             -RemoteFileName $RemoteFileName `
-            -MvsMode:$MvsMode
+            -MvsMode:$MvsMode `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds
 
         $transferOptions = New-Object WinSCP.TransferOptions
-        $transferOptions.TransferMode = [WinSCP.TransferMode]::Ascii
+        $transferOptions.TransferMode = [WinSCP.TransferMode]::$TransferMode
+        $remoteFileMask = [WinSCP.RemotePath]::EscapeFileMask($remotePath)
+        $temporaryDownloadPath = Join-Path $destinationDirectory (".PSFtpsActions.{0}.partial" -f ([guid]::NewGuid().ToString('N')))
 
         Write-Host "Downloading file..."
         Write-Host "Remote file: $remotePath"
         Write-Host "Local file : $localPath"
-        Write-Host "Mode       : ASCII"
+        Write-Host "Mode       : $TransferMode"
         Write-Host "MVS mode   : $MvsMode"
 
         $transferResult = Invoke-FtpsRetry `
@@ -234,25 +275,42 @@ function Get-FtpsFile {
             -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
             -OperationName 'Download FTPS file' `
             -ScriptBlock {
-                $session.GetFiles(
-                    $remotePath,
-                    $localPath,
+                if (Test-Path -LiteralPath $temporaryDownloadPath) {
+                    Remove-Item -LiteralPath $temporaryDownloadPath -Force
+                }
+
+                $result = $session.GetFiles(
+                    $remoteFileMask,
+                    $temporaryDownloadPath,
                     $false,
                     $transferOptions
                 )
-            }
 
-        $transferResult.Check()
+                $result.Check()
+
+                if ($result.Transfers.Count -ne 1) {
+                    throw "Expected one remote file but WinSCP transferred $($result.Transfers.Count)."
+                }
+
+                return $result
+            }
 
         foreach ($transfer in $transferResult.Transfers) {
             Write-Host "Downloaded: $($transfer.FileName)"
         }
+
+        Move-PSFtpsFileIntoPlace -TemporaryPath $temporaryDownloadPath -DestinationPath $localPath
+        $temporaryDownloadPath = $null
 
         Write-Host "Download complete."
 
         if ($DeleteRemoteAfterDownload) {
             Write-Host "Deleting remote file after successful download:"
             Write-Host $remotePath
+
+            if (-not $PSCmdlet.ShouldProcess($remotePath, 'Delete remote file after successful download')) {
+                return
+            }
 
             if ($MvsMode) {
                 Write-Host "Using MVS delete command:"
@@ -262,24 +320,28 @@ function Get-FtpsFile {
                     -RetryCount $connectionSettings.RetryCount `
                     -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
                     -OperationName 'Delete MVS remote file' `
-                    -ScriptBlock { $session.ExecuteCommand("DELE $RemoteFileName") }
+                    -ScriptBlock {
+                        $result = $session.ExecuteCommand("DELE $RemoteFileName")
+
+                        if ($result.ExitCode -ne 0) {
+                            throw "MVS remote delete failed. ExitCode=$($result.ExitCode). Output: $($result.Output)"
+                        }
+
+                        return $result
+                    }
 
                 if (-not [string]::IsNullOrWhiteSpace($deleteResult.Output)) {
                     Write-Host "Delete output:"
                     Write-Host $deleteResult.Output
                 }
 
-                if ($deleteResult.ExitCode -ne 0) {
-                    throw "MVS remote delete failed. ExitCode=$($deleteResult.ExitCode). Output: $($deleteResult.Output)"
-                }
             }
             else {
-                $removeResult = Invoke-FtpsRetry `
+                Invoke-FtpsRetry `
                     -RetryCount $connectionSettings.RetryCount `
                     -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
                     -OperationName 'Delete remote file' `
-                    -ScriptBlock { $session.RemoveFiles($remotePath) }
-                $removeResult.Check()
+                    -ScriptBlock { $session.RemoveFile($remotePath) } | Out-Null
             }
 
             Write-Host "Remote file deleted successfully."
@@ -295,6 +357,10 @@ function Get-FtpsFile {
 
         if ($transcriptStarted) {
             Stop-Transcript | Out-Null
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($temporaryDownloadPath) -and (Test-Path -LiteralPath $temporaryDownloadPath)) {
+            Remove-Item -LiteralPath $temporaryDownloadPath -Force
         }
     }
 }

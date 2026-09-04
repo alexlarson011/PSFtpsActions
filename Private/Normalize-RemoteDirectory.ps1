@@ -12,6 +12,14 @@ function Normalize-RemoteDirectory {
         [string]$Directory
     )
 
+    if ([string]::IsNullOrWhiteSpace($Directory)) {
+        throw 'Directory cannot be empty.'
+    }
+
+    if ($Directory -match '[\r\n]') {
+        throw 'Directory cannot contain carriage-return or newline characters.'
+    }
+
     $Directory = $Directory.Trim()
 
     if (-not $Directory.StartsWith('/')) {

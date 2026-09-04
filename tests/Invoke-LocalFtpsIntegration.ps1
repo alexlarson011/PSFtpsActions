@@ -426,6 +426,145 @@ try {
         -TlsMode Default `
         -TlsHostCertificateFingerprint $scanned.Fingerprint
 
+    $binaryUploadPath = Join-Path $localDir 'binary-upload.bin'
+    $binaryDownloadPath = Join-Path $downloadDir 'binary-downloaded.bin'
+    $binaryBytes = New-Object byte[] 1024
+    for ($index = 0; $index -lt $binaryBytes.Length; $index++) {
+        $binaryBytes[$index] = [byte]($index % 256)
+    }
+    [System.IO.File]::WriteAllBytes($binaryUploadPath, $binaryBytes)
+
+    Send-FtpsFile `
+        -FilePath $binaryUploadPath `
+        -RemoteFileName 'binary-upload.bin' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TransferMode Binary
+
+    Get-FtpsFile `
+        -RemoteFileName 'binary-upload.bin' `
+        -LocalDirectory $downloadDir `
+        -LocalFileName 'binary-downloaded.bin' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/' `
+        -TransferMode Binary `
+        -DeleteRemoteAfterDownload
+
+    Assert-True `
+        -Condition ((Get-FileHash -LiteralPath $binaryUploadPath -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $binaryDownloadPath -Algorithm SHA256).Hash) `
+        -Message 'Binary-mode download did not match the uploaded bytes.'
+
+    $deletedBinaryInfo = Test-FtpsRemoteFile `
+        -RemoteFileName 'binary-upload.bin' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+    Assert-True -Condition (-not $deletedBinaryInfo.Exists) -Message 'DeleteRemoteAfterDownload did not remove the binary test file.'
+
+    $protectedLocalPath = Join-Path $downloadDir 'protected-existing.txt'
+    Set-Content -LiteralPath $protectedLocalPath -Value 'keep this content' -NoNewline
+    $missingDownloadFailure = $null
+    try {
+        Get-FtpsFile `
+            -RemoteFileName 'does-not-exist.txt' `
+            -LocalDirectory $downloadDir `
+            -LocalFileName 'protected-existing.txt' `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/'
+    }
+    catch {
+        $missingDownloadFailure = $_
+    }
+
+    Assert-True -Condition ($null -ne $missingDownloadFailure) -Message 'A missing remote file did not fail the download.'
+    Assert-True -Condition ((Get-Content -LiteralPath $protectedLocalPath -Raw) -eq 'keep this content') -Message 'A failed download replaced the existing local file.'
+    Assert-True -Condition (@(Get-ChildItem -LiteralPath $downloadDir -Filter '.PSFtpsActions.*.partial' -Force).Count -eq 0) -Message 'A failed download left a partial file behind.'
+
+    foreach ($literalName in @('wildcard-one.txt', 'wildcard-two.txt')) {
+        Send-FtpsFile `
+            -FilePath $uploadPath `
+            -RemoteFileName $literalName `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/'
+    }
+
+    $wildcardDeleteFailure = $null
+    try {
+        Remove-FtpsFile `
+            -RemoteFileName 'wildcard-*.txt' `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/'
+    }
+    catch {
+        $wildcardDeleteFailure = $_
+    }
+    Assert-True -Condition ($null -ne $wildcardDeleteFailure) -Message 'A wildcard-like filename unexpectedly succeeded as a multi-file delete.'
+
+    foreach ($literalName in @('wildcard-one.txt', 'wildcard-two.txt')) {
+        $literalInfo = Test-FtpsRemoteFile `
+            -RemoteFileName $literalName `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/'
+        Assert-True -Condition $literalInfo.Exists -Message "Wildcard-like deletion removed '$literalName'."
+
+        Remove-FtpsFile `
+            -RemoteFileName $literalName `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/'
+    }
+
+    Send-FtpsFile `
+        -FilePath $uploadPath `
+        -RemoteFileName 'server-stored-case.txt' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    $caseVariantInfo = Test-FtpsRemoteFile `
+        -RemoteFileName 'SERVER-STORED-CASE.TXT' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+    Assert-True -Condition $caseVariantInfo.Exists -Message 'The remote-file check did not preserve case-insensitive server path semantics.'
+
+    Remove-FtpsFile `
+        -RemoteFileName 'SERVER-STORED-CASE.TXT' `
+        -CredentialName 'local-ftps' `
+        -HostAddress $server.host `
+        -Port $server.port `
+        -HostDirectory '/'
+
+    $directoryFailure = $null
+    try {
+        Test-FtpsRemoteFile `
+            -RemoteFileName 'anything.txt' `
+            -CredentialName 'local-ftps' `
+            -HostAddress $server.host `
+            -Port $server.port `
+            -HostDirectory '/directory-that-does-not-exist' | Out-Null
+    }
+    catch {
+        $directoryFailure = $_
+    }
+    Assert-True -Condition ($null -ne $directoryFailure) -Message 'A remote directory error was incorrectly reported as a missing file.'
+
     Write-Host 'Local FTPS integration test passed.'
 }
 finally {

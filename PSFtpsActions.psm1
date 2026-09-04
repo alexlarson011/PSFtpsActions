@@ -1,7 +1,14 @@
 Set-StrictMode -Version 2.0
 
 $script:ModuleRoot = $PSScriptRoot
-$script:DefaultWinScpDllPath = Join-Path $script:ModuleRoot 'lib\WinSCP\WinSCPnet.dll'
+$script:DefaultWinScpExePath = Join-Path $script:ModuleRoot 'lib\WinSCP\WinSCP.exe'
+$script:DefaultWinScpDllPath = if ($PSVersionTable.PSEdition -eq 'Core') {
+    Join-Path $script:ModuleRoot 'lib\WinSCP\netstandard2.0\WinSCPnet.dll'
+}
+else {
+    Join-Path $script:ModuleRoot 'lib\WinSCP\WinSCPnet.dll'
+}
+$script:CurrentWinScpExePath = $script:DefaultWinScpExePath
 $script:PSFtpsActionsSecurityDefault = @{
     TlsMode                       = 'Default'
     TlsHostCertificateFingerprint = $null

@@ -30,19 +30,29 @@ function Set-PSFtpsActionsConnectionDefault {
         [int]$RetryDelaySeconds
     )
 
+    $updatedConnectionDefault = @{
+        TimeoutSeconds    = $script:PSFtpsActionsConnectionDefault.TimeoutSeconds
+        RetryCount        = $script:PSFtpsActionsConnectionDefault.RetryCount
+        RetryDelaySeconds = $script:PSFtpsActionsConnectionDefault.RetryDelaySeconds
+    }
+
     if ($PSBoundParameters.ContainsKey('TimeoutSeconds')) {
-        $script:PSFtpsActionsConnectionDefault.TimeoutSeconds = $TimeoutSeconds
+        $updatedConnectionDefault.TimeoutSeconds = $TimeoutSeconds
     }
 
     if ($PSBoundParameters.ContainsKey('RetryCount')) {
-        $script:PSFtpsActionsConnectionDefault.RetryCount = $RetryCount
+        $updatedConnectionDefault.RetryCount = $RetryCount
     }
 
     if ($PSBoundParameters.ContainsKey('RetryDelaySeconds')) {
-        $script:PSFtpsActionsConnectionDefault.RetryDelaySeconds = $RetryDelaySeconds
+        $updatedConnectionDefault.RetryDelaySeconds = $RetryDelaySeconds
     }
 
-    Save-PSFtpsActionsConfig
+    Save-PSFtpsActionsConfig `
+        -SecurityDefault $script:PSFtpsActionsSecurityDefault `
+        -ConnectionDefault $updatedConnectionDefault
+
+    $script:PSFtpsActionsConnectionDefault = $updatedConnectionDefault
 
     Get-PSFtpsActionsConnectionDefault
 }

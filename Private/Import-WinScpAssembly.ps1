@@ -16,5 +16,20 @@ function Import-WinScpAssembly {
         throw "WinSCP .NET assembly not found: $WinScpDllPath"
     }
 
-    Add-Type -Path $WinScpDllPath
+    $resolvedDllPath = (Get-Item -LiteralPath $WinScpDllPath -ErrorAction Stop).FullName
+    $dllDirectory = Split-Path -Parent $resolvedDllPath
+    $executableCandidates = @(
+        (Join-Path $dllDirectory 'WinSCP.exe'),
+        (Join-Path (Split-Path -Parent $dllDirectory) 'WinSCP.exe')
+    )
+    $script:CurrentWinScpExePath = $null
+    $matchingExecutable = $executableCandidates |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+
+    if ($matchingExecutable) {
+        $script:CurrentWinScpExePath = (Get-Item -LiteralPath $matchingExecutable).FullName
+    }
+
+    Add-Type -Path $resolvedDllPath
 }

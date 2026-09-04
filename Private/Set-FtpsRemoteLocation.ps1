@@ -18,8 +18,24 @@ function Set-FtpsRemoteLocation {
         [string]$RemoteFileName,
 
         [Parameter(Mandatory = $false)]
-        [switch]$MvsMode
+        [switch]$MvsMode,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 100)]
+        [int]$RetryCount = 0,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 86400)]
+        [int]$RetryDelaySeconds = 5
     )
+
+    if ([string]::IsNullOrWhiteSpace($RemoteFileName)) {
+        throw 'RemoteFileName cannot be empty.'
+    }
+
+    if ($RemoteFileName -match '[\r\n]') {
+        throw 'RemoteFileName cannot contain carriage-return or newline characters.'
+    }
 
     if ($MvsMode) {
         $mvsDatasetPrefix = Normalize-MvsDatasetPrefix -DatasetPrefix $HostDirectory
@@ -27,15 +43,23 @@ function Set-FtpsRemoteLocation {
         Write-Host "Changing to MVS dataset prefix:"
         Write-Host $mvsDatasetPrefix
 
-        $cwdResult = $Session.ExecuteCommand("CWD $mvsDatasetPrefix")
+        $cwdResult = Invoke-FtpsRetry `
+            -RetryCount $RetryCount `
+            -RetryDelaySeconds $RetryDelaySeconds `
+            -OperationName 'Change to MVS dataset prefix' `
+            -ScriptBlock {
+                $result = $Session.ExecuteCommand("CWD $mvsDatasetPrefix")
+
+                if ($result.ExitCode -ne 0) {
+                    throw "MVS CWD failed. ExitCode=$($result.ExitCode). Output: $($result.Output)"
+                }
+
+                return $result
+            }
 
         if (-not [string]::IsNullOrWhiteSpace($cwdResult.Output)) {
             Write-Host "CWD output:"
             Write-Host $cwdResult.Output
-        }
-
-        if ($cwdResult.ExitCode -ne 0) {
-            throw "MVS CWD failed. ExitCode=$($cwdResult.ExitCode). Output: $($cwdResult.Output)"
         }
 
         return $RemoteFileName

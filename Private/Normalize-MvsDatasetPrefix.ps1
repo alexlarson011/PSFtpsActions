@@ -12,8 +12,20 @@ function Normalize-MvsDatasetPrefix {
         [string]$DatasetPrefix
     )
 
+    if ([string]::IsNullOrWhiteSpace($DatasetPrefix)) {
+        throw 'DatasetPrefix cannot be empty.'
+    }
+
+    if ($DatasetPrefix -match '[\r\n]') {
+        throw 'DatasetPrefix cannot contain carriage-return or newline characters.'
+    }
+
     $DatasetPrefix = $DatasetPrefix.Trim()
     $DatasetPrefix = $DatasetPrefix.Trim("'")
+
+    if ([string]::IsNullOrWhiteSpace($DatasetPrefix) -or $DatasetPrefix.Contains("'")) {
+        throw 'DatasetPrefix contains invalid quote characters.'
+    }
 
     if (-not $DatasetPrefix.EndsWith('.')) {
         $DatasetPrefix = $DatasetPrefix + '.'

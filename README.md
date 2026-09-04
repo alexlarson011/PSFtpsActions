@@ -43,9 +43,9 @@ Get-Command -Module PSFtpsActions
 | `Set-PSFtpsActionsSecurityDefault` | Sets module security defaults for the current PowerShell session. |
 | `Get-PSFtpsActionsConnectionDefault` | Shows the current timeout and retry defaults. |
 | `Set-PSFtpsActionsConnectionDefault` | Sets timeout and retry defaults for the current PowerShell session. |
-| `Set-PSFtpsCredential` | Stores a named PSCredential in memory for the current PowerShell session. |
-| `Get-PSFtpsCredential` | Lists named credentials stored in memory. |
-| `Remove-PSFtpsCredential` | Removes a named credential from memory. |
+| `Set-PSFtpsCredential` | Stores a named PSCredential in memory and in the configured local credential store. |
+| `Get-PSFtpsCredential` | Lists named credentials loaded from the configured local credential store. |
+| `Remove-PSFtpsCredential` | Removes a named credential from memory and the configured local credential store. |
 | `Get-PSFtpsActionsStoragePath` | Shows local config and credential storage paths. |
 | `Set-PSFtpsActionsStoragePath` | Changes local config and credential storage paths for the current session. |
 | `Get-TDayFileName` | Builds a prefix plus padded day-of-year file name such as `T127`. |
@@ -64,7 +64,7 @@ Most FTPS commands share these parameters:
 | Parameter | Description |
 | --- | --- |
 | `Username` | FTPS username. |
-| `Password` | FTPS password. |
+| `Password` | Legacy plain-text FTPS password retained for unattended-job compatibility. Prefer `Credential` or `CredentialName` when possible. |
 | `Credential` | PSCredential containing the FTPS username and password. |
 | `CredentialName` | Name of a credential stored with `Set-PSFtpsCredential`. |
 | `HostAddress` | FTPS server host name or IP address. |
@@ -75,6 +75,7 @@ Most FTPS commands share these parameters:
 | `ConvertToUtf8NoBom` | `Send-FtpsFile` only. Uploads a temporary UTF-8 without BOM copy and leaves the source file unchanged. |
 | `TrimTrailingWhitespace` | `Send-FtpsFile` only. Removes trailing spaces and tabs from each line in the temporary upload copy. |
 | `LineEnding` | `Send-FtpsFile` only. Uses `Preserve` by default. Can be switched to `Windows` CRLF or `Unix` LF. |
+| `TransferMode` | `Send-FtpsFile` and `Get-FtpsFile` only. `Ascii` is the backward-compatible default; `Binary` preserves bytes; `Automatic` lets WinSCP choose by file name. |
 | `LogDirectory` | Optional directory for PowerShell transcript logs. |
 | `EnableSessionLog` | Enables WinSCP session logging. |
 | `TlsMode` | TLS behavior: `Default`, `Tls12Only`, or `Tls12OrHigher`. Defaults to the module security default. |
@@ -118,6 +119,38 @@ Send-FtpsFile `
 ```
 
 By default, credentials are stored under `%APPDATA%\PSFtpsActions\Credentials` as CLIXML. On Windows, exported PSCredential secrets are protected by DPAPI for the current Windows user.
+
+### Use a JAMS-managed credential
+
+For a JAMS PowerShell job, the preferred unattended pattern is to retrieve a JAMS Credential Definition at runtime and pass the resulting credential directly to this module. This keeps the password out of the job source and command line:
+
+```powershell
+Import-Module JAMS
+Import-Module PSFtpsActions
+
+$ftpsCredential = Get-JAMSCredential -Username 'JAMSFTPUser'
+
+Send-FtpsFile `
+    -FilePath 'C:\Temp\outbound.txt' `
+    -RemoteFileName 'outbound.txt' `
+    -Credential $ftpsCredential `
+    -HostAddress 'ftps.example.com' `
+    -HostDirectory '/inbound'
+```
+
+The identity running the job needs the JAMS permissions required to retrieve that Credential Definition, including password access. Recent JAMS versions can also back a JAMS credential with a supported external secret provider.
+
+Current JAMS documentation says its PowerShell cmdlets are not available in PowerShell Core. Use the JAMS credential pattern above from a Windows PowerShell execution method. For a PowerShell Core job, use the module-managed `CredentialName` fallback below or inject a protected JAMS parameter without placing the literal password in job source.
+
+If `Get-JAMSCredential` is unavailable in a particular execution method, provision a module credential once on the remote machine while running as the same Windows identity as the JAMS job:
+
+```powershell
+Set-PSFtpsCredential -Name 'partner-ftps' -Credential (Get-Credential)
+```
+
+The scheduled job can then use `-CredentialName 'partner-ftps'`. Because the saved secret uses current-user DPAPI protection, provisioning it under a different account or on a different machine will not work.
+
+The `-Username`/`-Password` form remains supported for existing JAMS jobs. Avoid embedding a literal password in the script; if JAMS must substitute a password, pass it through a protected JAMS parameter and ensure command echoing and transcript capture do not expose the expanded value.
 
 ### Scan and pin a TLS certificate fingerprint
 
@@ -233,6 +266,8 @@ Get-FtpsFile `
     -HostDirectory '/outbound'
 ```
 
+Both upload and download retain `Ascii` as the default so existing text and MVS jobs do not change behavior. Use `-TransferMode Binary` for archives, images, Office documents, PDFs, and other byte-sensitive files, or `-TransferMode Automatic` to let WinSCP select a mode from the file name.
+
 ### Download and delete the remote file
 
 ```powershell
@@ -245,6 +280,8 @@ Get-FtpsFile `
     -HostDirectory '/outbound' `
     -DeleteRemoteAfterDownload
 ```
+
+`Send-FtpsFile`, `Get-FtpsFile`, `Remove-FtpsFile`, and `Remove-PSFtpsCredential` support `-WhatIf` and `-Confirm`. Existing unattended jobs do not prompt by default; add `-Confirm:$false` if the JAMS environment changes `$ConfirmPreference` to a stricter setting.
 
 ### Use MVS mode
 
@@ -305,7 +342,7 @@ RetryCount        = 0
 RetryDelaySeconds = 5
 ```
 
-Retries default to `0` because repeating uploads and deletes can be surprising. You can opt in for a flaky endpoint:
+Retries default to `0` because repeating uploads and deletes can be surprising. When enabled, connection, transfer-result, MVS navigation, and delete failures are evaluated inside the retry loop. You can opt in for a flaky endpoint:
 
 ```powershell
 Set-PSFtpsActionsConnectionDefault `
@@ -414,6 +451,12 @@ Run the local integration test:
 
 ```powershell
 .\tests\Invoke-LocalFtpsIntegration.ps1
+```
+
+The repository also includes offline regression tests that do not require Python or a live FTPS endpoint:
+
+```powershell
+.\tests\Invoke-RegressionTests.ps1
 ```
 
 The test creates all files under a temporary directory and removes them when it finishes.

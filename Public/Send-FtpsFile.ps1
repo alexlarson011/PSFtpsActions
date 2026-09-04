@@ -3,7 +3,7 @@
 Uploads a local file to an explicit FTPS endpoint.
 
 .DESCRIPTION
-Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the target remote location, and uploads a file in ASCII transfer mode. Supports standard FTP paths and MVS dataset-prefix navigation. Can optionally upload a temporary normalized text copy of the source file.
+Connects to an FTPS server using the bundled WinSCP .NET assembly, optionally sends a SITE command, resolves the target remote location, and uploads a file. ASCII transfer mode remains the default for backward compatibility. Supports standard FTP paths and MVS dataset-prefix navigation. Can optionally upload a temporary normalized text copy of the source file.
 
 .PARAMETER FilePath
 Path to the local file to upload.
@@ -15,7 +15,7 @@ Name to use for the uploaded remote file or MVS member/data set name.
 FTPS username. Use with Password, or use Credential/CredentialName instead.
 
 .PARAMETER Password
-FTPS password. Use with Username, or use Credential/CredentialName instead.
+Legacy plain-text FTPS password. Use with Username; prefer Credential or CredentialName when possible.
 
 .PARAMETER Credential
 PSCredential containing the FTPS username and password.
@@ -46,6 +46,9 @@ Uploads a temporary copy with trailing spaces and tabs removed from each line. T
 
 .PARAMETER LineEnding
 Line ending handling for the temporary upload copy. Preserve leaves line endings as read from the source file and is the default. Windows uses CRLF. Unix uses LF.
+
+.PARAMETER TransferMode
+WinSCP transfer mode to use for the upload. Valid values are Ascii, Binary, and Automatic. Defaults to Ascii for backward compatibility.
 
 .PARAMETER WinScpDllPath
 Path to WinSCPnet.dll. Defaults to the bundled assembly under the module's lib folder.
@@ -92,7 +95,7 @@ Send-FtpsFile -FilePath 'C:\Temp\outbound.txt' -RemoteFileName 'outbound.txt' -U
 Uploads a temporary UTF-8 without BOM copy with trailing spaces/tabs removed and LF line endings.
 #>
 function Send-FtpsFile {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param (
         [Parameter(Mandatory = $true)]
         [string]$FilePath,
@@ -138,6 +141,10 @@ function Send-FtpsFile {
         [string]$LineEnding = 'Preserve',
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet('Ascii', 'Binary', 'Automatic')]
+        [string]$TransferMode = 'Ascii',
+
+        [Parameter(Mandatory = $false)]
         [string]$WinScpDllPath = $script:DefaultWinScpDllPath,
 
         [Parameter(Mandatory = $false)]
@@ -172,18 +179,27 @@ function Send-FtpsFile {
     $temporaryUploadPath = $null
 
     try {
+        if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) {
+            throw "File not found or path is not a file: $FilePath"
+        }
+
+        $fileInfo = Get-Item -LiteralPath $FilePath -ErrorAction Stop
+
+        if ($fileInfo -isnot [System.IO.FileInfo]) {
+            throw "Path is not a file-system file: $FilePath"
+        }
+
+        $uploadTarget = "${HostAddress}:$Port $HostDirectory/$RemoteFileName"
+        if (-not $PSCmdlet.ShouldProcess($uploadTarget, "Upload '$($fileInfo.FullName)' using $TransferMode transfer mode")) {
+            return
+        }
+
         if (-not [string]::IsNullOrWhiteSpace($LogDirectory)) {
             Start-FtpsTranscript -LogDirectory $LogDirectory -OperationName $operationName | Out-Null
             $transcriptStarted = $true
         }
 
-        if (-not (Test-Path -LiteralPath $FilePath)) {
-            throw "File not found: $FilePath"
-        }
-
         Import-WinScpAssembly -WinScpDllPath $WinScpDllPath
-
-        $fileInfo = Get-Item -LiteralPath $FilePath
 
         if ($ConvertToUtf8NoBom -or $TrimTrailingWhitespace -or $PSBoundParameters.ContainsKey('LineEnding')) {
             $temporaryUploadPath = Join-Path ([System.IO.Path]::GetTempPath()) ("PSFtpsActions_Normalized_{0}_{1}" -f ([guid]::NewGuid().ToString('N')), $fileInfo.Name)
@@ -241,10 +257,12 @@ function Send-FtpsFile {
             -Session $session `
             -HostDirectory $HostDirectory `
             -RemoteFileName $RemoteFileName `
-            -MvsMode:$MvsMode
+            -MvsMode:$MvsMode `
+            -RetryCount $connectionSettings.RetryCount `
+            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds
 
         $transferOptions = New-Object WinSCP.TransferOptions
-        $transferOptions.TransferMode = [WinSCP.TransferMode]::Ascii
+        $transferOptions.TransferMode = [WinSCP.TransferMode]$TransferMode
 
         Write-Host "Uploading file..."
         Write-Host "Local file : $($fileInfo.FullName)"
@@ -252,7 +270,7 @@ function Send-FtpsFile {
         Write-Host "Trim trailing whitespace: $TrimTrailingWhitespace"
         Write-Host "Line ending: $LineEnding"
         Write-Host "Remote file: $remotePath"
-        Write-Host "Mode       : ASCII"
+        Write-Host "Mode       : $TransferMode"
         Write-Host "MVS mode   : $MvsMode"
 
         $transferResult = Invoke-FtpsRetry `
@@ -260,15 +278,21 @@ function Send-FtpsFile {
             -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
             -OperationName 'Upload FTPS file' `
             -ScriptBlock {
-                $session.PutFiles(
+                $result = $session.PutFiles(
                     $fileInfo.FullName,
                     $remotePath,
                     $false,
                     $transferOptions
                 )
-            }
 
-        $transferResult.Check()
+                $result.Check()
+
+                if ($result.Transfers.Count -ne 1) {
+                    throw "Expected one local file but WinSCP transferred $($result.Transfers.Count)."
+                }
+
+                $result
+            }
 
         foreach ($transfer in $transferResult.Transfers) {
             Write-Host "Uploaded: $($transfer.FileName)"

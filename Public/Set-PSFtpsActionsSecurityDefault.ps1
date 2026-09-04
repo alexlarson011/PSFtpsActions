@@ -39,18 +39,27 @@ function Set-PSFtpsActionsSecurityDefault {
         [switch]$ClearTlsHostCertificateFingerprint
     )
 
+    $updatedSecurityDefault = @{
+        TlsMode                        = $script:PSFtpsActionsSecurityDefault.TlsMode
+        TlsHostCertificateFingerprint = $script:PSFtpsActionsSecurityDefault.TlsHostCertificateFingerprint
+    }
+
     if ($PSBoundParameters.ContainsKey('TlsMode')) {
-        $script:PSFtpsActionsSecurityDefault.TlsMode = $TlsMode
+        $updatedSecurityDefault.TlsMode = $TlsMode
     }
 
     if ($ClearTlsHostCertificateFingerprint) {
-        $script:PSFtpsActionsSecurityDefault.TlsHostCertificateFingerprint = $null
+        $updatedSecurityDefault.TlsHostCertificateFingerprint = $null
     }
     elseif ($PSBoundParameters.ContainsKey('TlsHostCertificateFingerprint')) {
-        $script:PSFtpsActionsSecurityDefault.TlsHostCertificateFingerprint = Normalize-TlsHostCertificateFingerprint -Fingerprint $TlsHostCertificateFingerprint
+        $updatedSecurityDefault.TlsHostCertificateFingerprint = Normalize-TlsHostCertificateFingerprint -Fingerprint $TlsHostCertificateFingerprint
     }
 
-    Save-PSFtpsActionsConfig
+    Save-PSFtpsActionsConfig `
+        -SecurityDefault $updatedSecurityDefault `
+        -ConnectionDefault $script:PSFtpsActionsConnectionDefault
+
+    $script:PSFtpsActionsSecurityDefault = $updatedSecurityDefault
 
     Get-PSFtpsActionsSecurityDefault
 }

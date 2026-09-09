@@ -192,42 +192,67 @@ function Test-FtpsRemoteFile {
         Write-Host "Checking remote file:"
         Write-Host $remotePath
 
+        $fileInfo = $null
         if ($MvsMode) {
-            $lookupDirectory = '.'
-            $lookupName = $RemoteFileName
+            # MVS dataset prefixes do not have ordinary directory semantics.
+            # Query the target directly; LIST '.' can fail even after CWD succeeds.
+            try {
+                $fileInfo = Invoke-FtpsRetry `
+                    -RetryCount $connectionSettings.RetryCount `
+                    -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                    -OperationName 'Get remote MVS file metadata' `
+                    -ScriptBlock { $session.GetFileInfo($remotePath) }
+            }
+            catch {
+                # Only the explicit MVS no-match response means the target is absent.
+                # PowerShell can wrap the WinSCP exception in a method-call exception.
+                $exception = $_.Exception
+                $noDataSetsFound = $false
+                while ($null -ne $exception) {
+                    if ($exception -is [WinSCP.SessionRemoteException] -and
+                        $exception.Message -match '(?im)^\s*(?:550[ -])?No data sets found\.?\s*$') {
+                        $noDataSetsFound = $true
+                        break
+                    }
+                    $exception = $exception.InnerException
+                }
+                if (-not $noDataSetsFound) {
+                    throw
+                }
+            }
         }
         else {
             $lookupDirectory = [WinSCP.RemotePath]::GetDirectoryName($remotePath)
             $lookupName = [WinSCP.RemotePath]::GetFileName($remotePath)
-        }
 
-        $directoryInfo = Invoke-FtpsRetry `
-            -RetryCount $connectionSettings.RetryCount `
-            -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
-            -OperationName 'List remote directory for file check' `
-            -ScriptBlock { $session.ListDirectory($lookupDirectory) }
-
-        $fileInfo = @(
-            $directoryInfo.Files | Where-Object {
-                [string]::Equals($_.Name, $lookupName, [System.StringComparison]::Ordinal)
-            }
-        ) | Select-Object -First 1
-
-        if ($null -eq $fileInfo) {
-            # A server can resolve names case-insensitively while returning its stored casing in LIST.
-            # Ask the server before concluding that a differently-cased or unlisted path is absent.
-            $serverResolvedExists = Invoke-FtpsRetry `
+            $directoryInfo = Invoke-FtpsRetry `
                 -RetryCount $connectionSettings.RetryCount `
                 -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
-                -OperationName 'Resolve remote file existence' `
-                -ScriptBlock { $session.FileExists($remotePath) }
+                -OperationName 'List remote directory for file check' `
+                -ScriptBlock { $session.ListDirectory($lookupDirectory) }
 
-            if ($serverResolvedExists) {
-                $fileInfo = Invoke-FtpsRetry `
+            $fileInfo = @(
+                $directoryInfo.Files | Where-Object {
+                    [string]::Equals($_.Name, $lookupName, [System.StringComparison]::Ordinal)
+                }
+            ) | Select-Object -First 1
+
+            if ($null -eq $fileInfo) {
+                # A server can resolve names case-insensitively while returning its stored casing in LIST.
+                # Ask the server before concluding that a differently-cased or unlisted path is absent.
+                $serverResolvedExists = Invoke-FtpsRetry `
                     -RetryCount $connectionSettings.RetryCount `
                     -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
-                    -OperationName 'Get remote file metadata' `
-                    -ScriptBlock { $session.GetFileInfo($remotePath) }
+                    -OperationName 'Resolve remote file existence' `
+                    -ScriptBlock { $session.FileExists($remotePath) }
+
+                if ($serverResolvedExists) {
+                    $fileInfo = Invoke-FtpsRetry `
+                        -RetryCount $connectionSettings.RetryCount `
+                        -RetryDelaySeconds $connectionSettings.RetryDelaySeconds `
+                        -OperationName 'Get remote file metadata' `
+                        -ScriptBlock { $session.GetFileInfo($remotePath) }
+                }
             }
         }
 

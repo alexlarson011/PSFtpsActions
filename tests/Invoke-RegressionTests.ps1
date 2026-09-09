@@ -307,6 +307,85 @@ try {
         Assert-Equal -Expected 3 -Actual $fakeSession.Attempts -Message 'Nonzero MVS command results were not retried.'
     }
 
+    Invoke-RegressionTest -Name 'MVS file checks query the target directly and preserve real failures' -ScriptBlock {
+        & $script:ModuleUnderTest { Import-WinScpAssembly }
+        # WinSCP creates remote exceptions internally, so use its nonpublic constructor
+        # to exercise the real exception type and PowerShell method-call wrapping offline.
+        $remoteExceptionConstructor = [WinSCP.SessionRemoteException].GetConstructor(
+            [System.Reflection.BindingFlags]'Instance,NonPublic', $null,
+            [type[]]@([WinSCP.Session], [string]), $null
+        )
+        $cases = @(
+            @{ Name = 'present'; Error = $null; Exists = $true; Throws = $false; Mvs = $true },
+            @{ Name = 'absent'; Error = $remoteExceptionConstructor.Invoke(@($null, "Cannot get attributes of file 'T001'.`r`nNo data sets found.")); Exists = $false; Throws = $false; Mvs = $true },
+            @{ Name = 'absent with reply code'; Error = $remoteExceptionConstructor.Invoke(@($null, '550 No data sets found.')); Exists = $false; Throws = $false; Mvs = $true },
+            @{ Name = 'permission denied'; Error = $remoteExceptionConstructor.Invoke(@($null, '550 Permission denied.')); Exists = $false; Throws = $true; Mvs = $true },
+            @{ Name = 'connection lost'; Error = [System.TimeoutException]::new('Connection timed out.'); Exists = $false; Throws = $true; Mvs = $true },
+            @{ Name = 'unrelated exception with same text'; Error = [System.InvalidOperationException]::new('No data sets found.'); Exists = $false; Throws = $true; Mvs = $true },
+            @{ Name = 'ordinary FTP listing failure'; Error = $null; Exists = $false; Throws = $true; Mvs = $false }
+        )
+        foreach ($case in $cases) {
+            $fakeSession = [PSCustomObject]@{
+                Failure = $case.Error; Disposed = $false; MetadataCalls = 0
+                ListCalls = 0; LastPath = $null; Command = $null
+            }
+            $fakeSession | Add-Member ScriptMethod Open { param ($options) }
+            $fakeSession | Add-Member ScriptMethod Dispose { $this.Disposed = $true }
+            $fakeSession | Add-Member ScriptMethod ExecuteCommand {
+                param ($command)
+                $this.Command = $command
+                [PSCustomObject]@{ ExitCode = 0; Output = 'CWD succeeded' }
+            }
+            $fakeSession | Add-Member ScriptMethod ListDirectory {
+                param ($path)
+                $this.ListCalls++
+                throw 'Error listing directory.'
+            }
+            $fakeSession | Add-Member ScriptMethod GetFileInfo {
+                param ($path)
+                $this.MetadataCalls++
+                $this.LastPath = $path
+                if ($null -ne $this.Failure) { throw $this.Failure }
+                [PSCustomObject]@{ Length = 123; LastWriteTime = [datetime]'2026-09-09'; IsDirectory = $false }
+            }
+            $caught = $null
+            $result = $null
+            try {
+                $result = & $script:ModuleUnderTest {
+                    param ($fakeSession, $mvsMode)
+                    # These overrides live only in this invocation's local scope.
+                    function New-FtpsSession { $fakeSession }
+                    function New-FtpsSessionOptions { [PSCustomObject]@{} }
+                    Test-FtpsRemoteFile -RemoteFileName 'T001' -HostDirectory 'HLQ.APP.DATA' `
+                        -HostAddress 'offline.invalid' -Username 'test' -Password 'test' `
+                        -MvsMode:$mvsMode -RetryCount 0 -RetryDelaySeconds 0
+                } $fakeSession $case.Mvs
+            }
+            catch { $caught = $_ }
+
+            Assert-Equal -Expected $case.Throws -Actual ($null -ne $caught) -Message "Unexpected failure state for $($case.Name): $caught"
+            Assert-True -Condition $fakeSession.Disposed -Message "Session was not disposed for $($case.Name)."
+            if ($case.Mvs) {
+                Assert-Equal -Expected 0 -Actual $fakeSession.ListCalls -Message 'MVS file check attempted a directory listing.'
+                Assert-Equal -Expected 'T001' -Actual $fakeSession.LastPath -Message 'MVS check did not query the relative target.'
+                Assert-Equal -Expected "CWD 'HLQ.APP.DATA.'" -Actual $fakeSession.Command -Message 'MVS prefix was not selected.'
+            }
+            else {
+                Assert-Equal -Expected 1 -Actual $fakeSession.ListCalls -Message 'Ordinary FTP no longer validates the directory.'
+            }
+            if (-not $case.Throws) {
+                Assert-Equal -Expected $case.Exists -Actual $result.Exists -Message "Incorrect existence result for $($case.Name)."
+                Assert-Equal -Expected 'T001' -Actual $result.RemotePath -Message 'Incorrect MVS result path.'
+                if ($case.Exists) {
+                    Assert-Equal -Expected 123 -Actual $result.Length -Message 'Existing file metadata was lost.'
+                }
+                else {
+                    Assert-True -Condition ($null -eq $result.Length) -Message 'Missing file has unexpected metadata.'
+                }
+            }
+        }
+    }
+
     Invoke-RegressionTest -Name 'Normalize-TlsHostCertificateFingerprint accepts common SHA-256 forms' -ScriptBlock {
         $hex = '0011223344556677001122334455667700112233445566770011223344556677'
         $expected = '00:11:22:33:44:55:66:77:00:11:22:33:44:55:66:77:00:11:22:33:44:55:66:77:00:11:22:33:44:55:66:77'
